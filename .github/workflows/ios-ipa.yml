@@ -1,0 +1,91 @@
+name: Build unsigned iOS IPA
+
+# Put this file in your fork at .github/workflows/ios-ipa.yml
+# Run it from the Actions tab (Run workflow). Output: artifact "NutAI-unsigned-ipa".
+# Signing and install happen locally with: xtool install NutAI.ipa
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: "Bundle ID (empty = com.<your-github-login>.nutai)"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build bundled nutrition database
+        run: npm run data:build
+
+      - name: Set unique bundle ID
+        env:
+          INPUT_BID: ${{ inputs.bundle_id }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_BID" ]; then
+            BID="$INPUT_BID"
+          else
+            OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]' | tr -dc 'a-z0-9')
+            BID="com.${OWNER}.nutai"
+          fi
+          sed -i '' "s|const BUNDLE_ID = 'com.nutai.app'|const BUNDLE_ID = '${BID}'|" apps/mobile/app.config.ts
+          grep -q "const BUNDLE_ID = '${BID}'" apps/mobile/app.config.ts
+          echo "Bundle ID: ${BID}"
+
+      # HealthKit is OFF by default in app.config.ts (SKIP_HEALTHKIT != '0').
+      # Do not set SKIP_HEALTHKIT=0 here: a free Apple ID cannot sign it.
+      - name: Generate native iOS project
+        working-directory: apps/mobile
+        run: npm run prebuild
+
+      - name: Build unsigned Release app
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/NutAI.xcworkspace \
+            -scheme NutAI \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package IPA
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
+          test -n "$APP"
+          rm -rf Payload NutAI.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry NutAI.ipa Payload
+          ls -lh NutAI.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NutAI-unsigned-ipa
+          path: apps/mobile/NutAI.ipa
+          retention-days: 14
+          if-no-files-found: error
