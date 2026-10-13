@@ -313,7 +313,7 @@ describe('publik mode', () => {
   it('a vendor 402 with a non-JSON body keeps the vendor copy (regression)', async () => {
     const { impl } = scriptedWithHeaders([{ status: 402, body: 'Payment Required' }])
     const r = await runScan(SCAN_REQ(), impl)
-    expect(!r.ok && r.error.message).toBe('Your provider account is out of credit.')
+    expect(!r.ok && r.error.message).toBe('Na koncie u dostawcy skończył się kredyt.')
   })
 
   it('a structural 400 from the gateway still triggers the schema-less retry', async () => {

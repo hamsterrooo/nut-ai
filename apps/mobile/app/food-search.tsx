@@ -1,3 +1,4 @@
+import { formatDecimal, formatInteger } from '../src/i18n/format'
 import { router } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
@@ -75,13 +76,13 @@ export default function FoodSearch() {
       if (!alive) return
       if (r.outcome.kind === 'auto_accept') {
         setResults([r.outcome.match])
-        setOutcome(`auto-accepted (score ${r.outcome.match.score.toFixed(2)})`)
+        setOutcome(`dopasowano automatycznie (wynik ${formatDecimal(r.outcome.match.score, 2)})`)
       } else if (r.outcome.kind === 'disambiguate') {
         setResults(r.outcome.candidates)
-        setOutcome(`${r.outcome.candidates.length} candidates — tap the right one`)
+        setOutcome(`kandydaci: ${r.outcome.candidates.length}, dotknij właściwego`)
       } else {
         setResults([])
-        setOutcome('no match — this would log as an AI estimate')
+        setOutcome('brak dopasowania, zapisze się jako szacunek AI')
       }
       setBusy(false)
     }, 180)
@@ -96,17 +97,17 @@ export default function FoodSearch() {
       await selectFood(db, candidate, Date.now())
       router.back()
     } catch {
-      setError('Could not log that food — try again.')
+      setError('Nie udało się zapisać tego produktu, spróbuj ponownie.')
       setSelectingId(null)
     }
   }
 
   const corpusLine = useMemo(() => {
-    if (!corpus) return 'Loading corpus…'
+    if (!corpus) return 'Wczytywanie bazy…'
     if (corpus.foods === 0) {
-      return 'Corpus missing — the app bundled without nutrition.db. Run `npm run data:build`.'
+      return 'Brak bazy: aplikację zbudowano bez nutrition.db. Uruchom `npm run data:build`.'
     }
-    return `${corpus.foods.toLocaleString()} foods · ${corpus.portions.toLocaleString()} portion weights · USDA, CC0`
+    return `${formatInteger(corpus.foods)} produktów · ${formatInteger(corpus.portions)} wag porcji · USDA, CC0`
   }, [corpus])
 
   return (
@@ -116,9 +117,9 @@ export default function FoodSearch() {
       contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 160 }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={[type.title, { color: theme.text }]}>Food Database</Text>
+        <Text style={[type.title, { color: theme.text }]}>Baza produktów</Text>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={space.md}>
-          <Text style={[type.body, { color: theme.textMuted }]}>Done</Text>
+          <Text style={[type.body, { color: theme.textMuted }]}>Gotowe</Text>
         </Pressable>
       </View>
       <Text style={[type.caption, { color: corpus?.foods === 0 ? theme.safety : theme.textMuted, marginTop: space.xs }]}>
@@ -126,8 +127,8 @@ export default function FoodSearch() {
       </Text>
 
       <TextInput
-        accessibilityLabel="Search foods"
-        placeholder="Search — try “chicken breast”"
+        accessibilityLabel="Szukaj produktów"
+        placeholder="Szukaj (baza jest po angielsku), np. „chicken breast”"
         placeholderTextColor={theme.textFaint}
         value={query}
         onChangeText={setQuery}
@@ -151,7 +152,7 @@ export default function FoodSearch() {
           key={r.foodId}
           testID={`food-search-row-${r.foodId}`}
           accessibilityRole="button"
-          accessibilityLabel={`Log ${r.name}`}
+          accessibilityLabel={`Dodaj ${r.name}`}
           disabled={selectingId != null}
           onPress={() => handleSelect(r)}
           style={({ pressed }) => [
@@ -162,22 +163,22 @@ export default function FoodSearch() {
           <View style={{ flex: 1 }}>
             <Text style={[type.body, { color: theme.text }]} numberOfLines={2}>{r.name}</Text>
             <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-              {r.energyKcal != null ? `${Math.round(r.energyKcal)} kcal / 100 g` : 'energy not reported'}
+              {r.energyKcal != null ? `${Math.round(r.energyKcal)} kcal / 100 g` : 'brak danych o energii'}
               {r.brand ? ` · ${r.brand}` : ''}
             </Text>
           </View>
           {selectingId === r.foodId ? (
             <ActivityIndicator color={theme.textFaint} />
           ) : (
-            <Text style={[type.micro, { color: theme.textFaint }]}>{r.score.toFixed(2)}</Text>
+            <Text style={[type.micro, { color: theme.textFaint }]}>{formatDecimal(r.score, 2)}</Text>
           )}
         </Pressable>
       ))}
 
       {query.trim().length >= 2 && !busy && results.length === 0 && (
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.lg }]}>
-          Nothing matched. That is not a failure — it logs as an AI estimate with an amber badge,
-          and you can save it as your own food so it resolves instantly next time.
+          Nic nie pasuje. To nie błąd: produkt zapisze się jako szacunek AI z bursztynową plakietką,
+          a możesz zapisać go jako własny produkt, żeby następnym razem dopasował się od razu.
         </Text>
       )}
     </ScrollView>

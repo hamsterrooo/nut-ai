@@ -65,12 +65,16 @@ const config: ExpoConfig = {
       // APIs (a vendor the user named, or publik API), which are exempt, so
       // there is no non-exempt encryption to declare.
       ITSAppUsesNonExemptEncryption: false,
+      // Polish-only app: declaring the localization makes iOS render its own UI (alert
+      // buttons, share sheet, document picker, keyboard) in Polish instead of English.
+      CFBundleDevelopmentRegion: 'pl',
+      CFBundleLocalizations: ['pl'],
       NSCameraUsageDescription:
-        'Nut AI uses your camera to photograph meals and scan barcodes. Photos stay on your device unless you choose a cloud provider during setup.',
+        'Nut AI używa aparatu do fotografowania posiłków i skanowania kodów kreskowych. Zdjęcia zostają na urządzeniu, chyba że podczas konfiguracji wybierzesz dostawcę w chmurze.',
       NSPhotoLibraryUsageDescription:
-        'Nut AI can read a meal photo you already took. Photos stay on your device unless you choose a cloud provider during setup.',
+        'Nut AI może odczytać zdjęcie posiłku, które już zrobiono. Zdjęcia zostają na urządzeniu, chyba że podczas konfiguracji wybierzesz dostawcę w chmurze.',
       NSFaceIDUsageDescription:
-        'Nut AI uses Face ID only when you reveal or edit a stored API key — never to log a meal.',
+        'Nut AI używa Face ID wyłącznie przy odsłanianiu lub edycji zapisanego klucza API, nigdy przy zapisywaniu posiłku.',
     },
   },
 
@@ -86,7 +90,7 @@ const config: ExpoConfig = {
 
   plugins: [
     'expo-router',
-    ['expo-camera', { cameraPermission: 'Nut AI uses your camera to photograph meals and scan barcodes.' }],
+    ['expo-camera', { cameraPermission: 'Nut AI używa aparatu do fotografowania posiłków i skanowania kodów kreskowych.' }],
     'expo-secure-store',
     'expo-sqlite',
     ...(SKIP_HEALTHKIT
@@ -98,9 +102,9 @@ const config: ExpoConfig = {
               // Both strings are required by App Review, and they must describe what we
               // actually do rather than what HealthKit could theoretically allow.
               NSHealthShareUsageDescription:
-                'Nut AI reads your steps, workouts and weight so your calorie target reflects what you actually did, instead of a fixed guess.',
+                'Nut AI odczytuje Twoje kroki, treningi i wagę, aby cel kaloryczny uwzględniał to, co faktycznie robisz, a nie stały domysł.',
               NSHealthUpdateUsageDescription:
-                'Nut AI writes the meals you log to Health so your nutrition data lives alongside the rest of your health record.',
+                'Nut AI zapisuje dodane posiłki w aplikacji Zdrowie, aby dane o żywieniu były razem z resztą Twoich danych zdrowotnych.',
               // Background delivery is deliberately off. It is an extra entitlement, it
               // is a battery cost, and nothing here needs to react to a step count
               // while the app is closed.

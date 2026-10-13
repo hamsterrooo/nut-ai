@@ -1,3 +1,4 @@
+import { pluralPl } from '../i18n/format'
 import { migrate, type DbAdapter } from '@nutai/db-adapter'
 import {
   computeMacros,
@@ -392,17 +393,17 @@ export interface AdaptiveOutcome {
  */
 export async function runAdaptive(now: number): Promise<AdaptiveOutcome> {
   const goal = await currentGoal()
-  if (!goal) return { ran: false, reason: 'No goal set yet.' }
-  if (!goal.adaptive) return { ran: false, reason: 'Adaptive targets are off — you set this target by hand.' }
+  if (!goal) return { ran: false, reason: 'Nie ustawiono jeszcze celu.' }
+  if (!goal.adaptive) return { ran: false, reason: 'Cele adaptacyjne są wyłączone, ten cel ustawiono ręcznie.' }
 
   const points = await weightHistory()
   if (points.length < 5) {
-    return { ran: false, reason: `Needs about ${5 - points.length} more weigh-ins before the trend means anything.` }
+    return { ran: false, reason: `Potrzeba jeszcze około ${5 - points.length} ${pluralPl(5 - points.length, 'ważenia', 'ważeń', 'ważeń')}, zanim trend cokolwiek znaczy.` }
   }
 
   const trend = computeTrend(points)
   const slope = trendSlopeLbPerWeek(trend)
-  if (slope == null) return { ran: false, reason: 'Not enough spread in your weigh-ins yet.' }
+  if (slope == null) return { ran: false, reason: 'Zbyt mała rozpiętość w czasie między ważeniami.' }
 
   const h = await db()
   const days = await h.all<{ local_date: string }>(
@@ -424,7 +425,7 @@ export async function runAdaptive(now: number): Promise<AdaptiveOutcome> {
   }
 
   if (admitted < 5) {
-    return { ran: false, reason: `Needs about ${5 - admitted} more fully-logged days before adjusting your target.` }
+    return { ran: false, reason: `Potrzeba jeszcze około ${5 - admitted} ${pluralPl(5 - admitted, 'dnia', 'dni', 'dni')} z pełnym zapisem posiłków, zanim cel zostanie dostosowany.` }
   }
 
   const updateCount = Number(await setting('adaptive.updateCount', '0'))
@@ -441,7 +442,7 @@ export async function runAdaptive(now: number): Promise<AdaptiveOutcome> {
   if (!result.shouldSurface) {
     return {
       ran: true,
-      reason: 'Your target is still right — no change worth showing.',
+      reason: 'Twój cel nadal jest trafny, nie ma zmiany wartej pokazania.',
       previousKcal: goal.targetKcal,
       newKcal: result.newTdee,
       surfaced: false,

@@ -1,4 +1,5 @@
 import { router } from 'expo-router'
+import { formatDecimal } from '../../src/i18n/format'
 import { useEffect } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { cheapestModel, PROVIDER_MODELS, providersByPrice, type ProviderId } from '@nutai/prompt'
@@ -32,9 +33,9 @@ import { radius, space, type } from '../../src/theme/tokens'
  */
 
 const LABELS: Record<ProviderId, { name: string; icon: IconName; note: string }> = {
-  openai: { name: 'OpenAI', icon: 'scan', note: 'GPT-4o and 4o-mini' },
-  google: { name: 'Google', icon: 'scan', note: 'Gemini — paid tier only' },
-  anthropic: { name: 'Anthropic', icon: 'scan', note: 'Claude Haiku and Sonnet' },
+  openai: { name: 'OpenAI', icon: 'scan', note: 'GPT-4o i 4o-mini' },
+  google: { name: 'Google', icon: 'scan', note: 'Gemini, tylko płatny poziom' },
+  anthropic: { name: 'Anthropic', icon: 'scan', note: 'Claude Haiku i Sonnet' },
 }
 
 export default function ProviderScreen() {
@@ -54,11 +55,11 @@ export default function ProviderScreen() {
     <OnboardingScreen
       step={stepIndex('provider')}
       total={TOTAL_STEPS}
-      title="How should Nut AI recognize your food?"
+      title="Jak Nut AI ma rozpoznawać Twoje jedzenie?"
       subtitle={
         publik
-          ? 'Scans run on publik API by default: link your publik account for $0.05 of free use, once. Prefer your own key? Pick a provider — your photo goes only to the one you name; we run no server of our own.'
-          : 'Bring your own API key. Your photo goes to the provider you name and nowhere else — we run no server.'
+          ? 'Skany domyślnie działają na publik API: połącz konto publik, aby jednorazowo dostać 0,05 $ darmowego użycia. Wolisz własny klucz? Wybierz dostawcę. Twoje zdjęcie trafia tylko do wskazanego dostawcy, nie prowadzimy własnego serwera.'
+          : 'Użyj własnego klucza API. Twoje zdjęcie trafia do wskazanego dostawcy i nigdzie indziej, nie prowadzimy serwera.'
       }
       ctaDisabled={a.provider === undefined}
       onCta={() => {
@@ -71,7 +72,7 @@ export default function ProviderScreen() {
         {publik ? (
           <OptionCard
             label="publik API"
-            sublabel="No key to paste. Starts at $0.00; link your publik account for $0.05 of free use, once. Priced per scan at 50% of the model's list price."
+            sublabel="Bez wklejania klucza. Zaczynasz od 0,00 $; po połączeniu konta publik dostajesz jednorazowo 0,05 $ darmowego użycia. Cena za skan to 50% ceny katalogowej modelu."
             glyph="scan"
             selected={a.provider === 'publik'}
             onPress={() => setAnswer('provider', 'publik')}
@@ -84,7 +85,7 @@ export default function ProviderScreen() {
             <OptionCard
               key={p}
               label={LABELS[p].name}
-              sublabel={`${LABELS[p].note} · ~$${cheap.approxScanCostUsd.toFixed(4)}/scan`}
+              sublabel={`${LABELS[p].note} · ~${formatDecimal(cheap.approxScanCostUsd, 4)} $ za skan`}
               glyph={LABELS[p].icon}
               selected={a.provider === p}
               onPress={() => setAnswer('provider', p)}
@@ -93,8 +94,8 @@ export default function ProviderScreen() {
         })}
 
         <OptionCard
-          label="No key for now"
-          sublabel="Barcode, label scan, text search and manual entry all still work"
+          label="Na razie bez klucza"
+          sublabel="Kod kreskowy, skan etykiety, wyszukiwanie tekstowe i ręczne dodawanie nadal działają"
           glyph="minus"
           selected={a.provider === 'none'}
           onPress={() => setAnswer('provider', 'none')}
@@ -103,26 +104,26 @@ export default function ProviderScreen() {
 
       <View style={[styles.note, { backgroundColor: theme.bgSunken }]}>
         <Text style={[type.caption, { color: theme.textMuted, lineHeight: 19 }]}>
-          {publik ? 'The three providers below are sorted' : 'Sorted'} by price, with no recommendation. Frontier models are not measurably better at
-          judging portion size — which is where nearly all the error is — so the cheapest vision
-          model is pre-selected on purpose, not as a compromise.
+          {publik ? 'Trzech dostawców poniżej posortowano' : 'Posortowano'} według ceny, bez rekomendacji. Najlepsze modele nie są wyraźnie lepsze w ocenie
+          wielkości porcji, a w niej siedzi prawie cały błąd, więc najtańszy model wizyjny jest
+          wybrany celowo, a nie z konieczności.
         </Text>
       </View>
 
       {a.provider === 'google' ? (
         <View style={[styles.warn, { backgroundColor: theme.uncertainBg }]}>
           <Text style={[type.caption, { color: theme.text, lineHeight: 19 }]}>
-            Gemini's free tier is blocked for photo scans. Google's own API terms say "do not submit
-            sensitive, confidential, or personal information to the Unpaid Services", and a meal
-            photo is health data. A paid Google key works normally.
+            Darmowy poziom Gemini jest zablokowany dla skanów zdjęć. Warunki API Google mówią: "nie
+            przesyłaj informacji wrażliwych, poufnych ani osobowych do usług bezpłatnych", a zdjęcie
+            posiłku to dane o zdrowiu. Płatny klucz Google działa normalnie.
           </Text>
         </View>
       ) : null}
 
       {a.provider && a.provider !== 'none' && a.provider !== 'publik' ? (
         <Text style={[type.caption, { color: theme.textFaint, marginTop: space.lg, lineHeight: 19 }]}>
-          {PROVIDER_MODELS[a.provider].length} models available. You can change model and set a
-          monthly spend cap after entering your key.
+          Dostępne modele: {PROVIDER_MODELS[a.provider].length}. Model zmienisz i ustawisz
+          miesięczny limit wydatków po wpisaniu klucza.
         </Text>
       ) : null}
     </OnboardingScreen>

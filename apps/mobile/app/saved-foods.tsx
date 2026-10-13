@@ -1,3 +1,4 @@
+import { pluralPl } from '../src/i18n/format'
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -42,19 +43,19 @@ export default function SavedFoods() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg, paddingTop: insets.top + space.lg }}>
       <View style={styles.head}>
-        <Text style={[type.title, { color: theme.text }]}>Saved foods</Text>
+        <Text style={[type.title, { color: theme.text }]}>Zapisane produkty</Text>
         <Pressable onPress={() => router.back()} hitSlop={space.md}>
-          <Text style={[type.body, { color: theme.textMuted }]}>Done</Text>
+          <Text style={[type.body, { color: theme.textMuted }]}>Gotowe</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 140 }}>
         {meals.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: theme.bgSunken }]}>
-            <Text style={[type.bodyStrong, { color: theme.text }]}>Nothing saved yet</Text>
+            <Text style={[type.bodyStrong, { color: theme.text }]}>Nic jeszcze nie zapisano</Text>
             <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
-              After you correct a scan, save it. Relogging it later costs nothing — no scan, no
-              network request, and none of the questions you already answered.
+              Po poprawieniu skanu zapisz go. Ponowne dodanie nic nie kosztuje: bez skanu, bez
+              zapytania do sieci i bez pytań, na które już odpowiedziano.
             </Text>
           </View>
         ) : (
@@ -63,10 +64,10 @@ export default function SavedFoods() {
               <View style={{ flex: 1 }}>
                 <Text style={[type.bodyStrong, { color: theme.text }]}>{m.name}</Text>
                 <Text style={[type.caption, { color: theme.textMuted }]}>
-                  Logged {m.use_count} {m.use_count === 1 ? 'time' : 'times'}
+                  Dodano {m.use_count} {pluralPl(m.use_count, 'raz', 'razy', 'razy')}
                 </Text>
               </View>
-              <Text style={[type.label, { color: theme.protein }]}>Log again</Text>
+              <Text style={[type.label, { color: theme.protein }]}>Dodaj ponownie</Text>
             </View>
           ))
         )}

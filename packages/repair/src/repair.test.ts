@@ -129,7 +129,7 @@ describe('every silent default is disclosed, never hidden', () => {
     const qs = selectQuestions({ item: item(), multiServingPackage: true })
     const serving = qs.find((q) => q.question.id === 'servings_consumed')
     expect(serving).toBeDefined()
-    expect(serving?.question.defaultDisclosure).toMatch(/tap to change/i)
+    expect(serving?.question.defaultDisclosure).toMatch(/dotknij, aby zmienić/i)
   })
 
   it('assumes regular soda, not diet — the higher-risk direction', () => {
@@ -172,7 +172,7 @@ describe('structural uncertainty is a floor, not a replacement', () => {
   it('produces specific, correctable assumptions rather than vague ones', () => {
     const s = inferStructuralUncertainty(item({ canonical_food_key: 'chicken stir fry' }))
     // "Assumed ~1 tbsp cooking oil" is correctable. "Results may vary" is not.
-    expect(s.assumptions.join(' ')).toMatch(/tbsp/)
+    expect(s.assumptions.join(' ')).toMatch(/łyżk/)
     expect(s.assumptions.join(' ')).not.toMatch(/may vary/i)
   })
 
@@ -181,7 +181,7 @@ describe('structural uncertainty is a floor, not a replacement', () => {
       item({ is_beverage: true, beverage_category: 'alcoholic_poured_or_mixed', canonical_food_key: 'beer' }),
     )
     expect(s.reasons).toContain('abv_unknown')
-    expect(s.assumptions.join(' ')).toMatch(/could easily be double/)
+    expect(s.assumptions.join(' ')).toMatch(/dwa razy więcej/)
   })
 
   it('notes a missing scale reference for non-discrete food', () => {

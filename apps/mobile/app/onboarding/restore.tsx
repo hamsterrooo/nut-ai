@@ -1,4 +1,5 @@
 import { router } from 'expo-router'
+import { formatDate } from '../../src/i18n/format'
 import { useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -32,8 +33,8 @@ export default function RestoreScreen() {
       if (res.reason === 'cancelled') return
       setError(
         res.reason === 'bad-json'
-          ? 'That file could not be read as JSON.'
-          : "That doesn't look like a Nut AI backup file.",
+          ? 'Nie udało się odczytać tego pliku jako JSON.'
+          : 'To nie wygląda na plik kopii zapasowej Nut AI.',
       )
       return
     }
@@ -43,12 +44,12 @@ export default function RestoreScreen() {
   function confirmRestore() {
     if (!payload || busy) return
     Alert.alert(
-      'Restore this backup?',
-      'This replaces any data currently on this device and cannot be undone.',
+      'Przywrócić tę kopię?',
+      'To zastąpi wszystkie dane obecnie na tym urządzeniu i nie można tego cofnąć.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Anuluj', style: 'cancel' },
         {
-          text: 'Restore',
+          text: 'Przywróć',
           style: 'destructive',
           onPress: () => {
             void (async () => {
@@ -56,14 +57,14 @@ export default function RestoreScreen() {
               try {
                 const outcome = await importBackup(payload)
                 if (!outcome.ok) {
-                  setError('This backup was made with a newer version of Nut AI — update the app first.')
+                  setError('Ta kopia powstała w nowszej wersji Nut AI. Najpierw zaktualizuj aplikację.')
                   return
                 }
                 await finishRestore()
                 router.replace('/(tabs)' as never)
               } catch (e) {
                 // Rolled back; nothing was changed. Say so, never fail silently.
-                setError(`Restore failed and nothing was changed: ${String((e as Error)?.message ?? e)}`)
+                setError(`Przywracanie nie powiodło się i nic nie zostało zmienione: ${String((e as Error)?.message ?? e)}`)
               } finally {
                 setBusy(false)
               }
@@ -76,29 +77,29 @@ export default function RestoreScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.bg, paddingTop: insets.top + space.xl }]}>
-      <Text style={[type.title, { color: theme.text, fontSize: 30 }]}>Restore from a backup</Text>
+      <Text style={[type.title, { color: theme.text, fontSize: 30 }]}>Przywróć z kopii zapasowej</Text>
       <Text style={[type.body, { color: theme.textMuted, marginTop: space.sm, lineHeight: 22 }]}>
-        Pick a Nut AI export file — everything comes back exactly as it was: meals, weights,
-        goals, settings.
+        Wybierz plik eksportu Nut AI. Wszystko wraca dokładnie tak, jak było: posiłki, wagi, cele
+        i ustawienia.
       </Text>
 
       {payload ? (
         <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
             <Icon name="check" size={18} color={theme.affirm} weight={2.4} />
-            <Text style={[type.bodyStrong, { color: theme.text }]}>Backup found</Text>
+            <Text style={[type.bodyStrong, { color: theme.text }]}>Znaleziono kopię</Text>
           </View>
           <Text style={[type.body, { color: theme.textMuted, marginTop: space.sm }]}>
             {describeBackup(payload)}
           </Text>
           <Text style={[type.caption, { color: theme.textFaint, marginTop: space.xs }]}>
-            Exported {new Date(payload.exported_at).toLocaleDateString()}
+            Wyeksportowano {formatDate(new Date(payload.exported_at), { withYear: true })}
           </Text>
         </View>
       ) : (
         <Pressable onPress={pick} style={[styles.pickCard, { borderColor: theme.border }]}>
           <Icon name="plus" size={22} color={theme.textMuted} />
-          <Text style={[type.bodyStrong, { color: theme.text }]}>Choose backup file</Text>
+          <Text style={[type.bodyStrong, { color: theme.text }]}>Wybierz plik kopii</Text>
           <Text style={[type.caption, { color: theme.textFaint }]}>nutai-backup-….json</Text>
         </Pressable>
       )}
@@ -111,8 +112,8 @@ export default function RestoreScreen() {
 
       <View style={[styles.card, { backgroundColor: theme.uncertainBg }]}>
         <Text style={[type.caption, { color: theme.text, lineHeight: 19 }]}>
-          One thing never travels in a backup: your API key. Keys stay in the device Keychain, so
-          after restoring you will re-enter it once in Profile.
+          Jedna rzecz nigdy nie trafia do kopii: Twój klucz API. Klucze zostają w pęku kluczy
+          urządzenia, więc po przywróceniu wpiszesz go raz w Profilu.
         </Text>
       </View>
 
@@ -131,7 +132,7 @@ export default function RestoreScreen() {
         ]}
       >
         <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>
-          {busy ? 'Restoring…' : 'Restore'}
+          {busy ? 'Przywracanie…' : 'Przywróć'}
         </Text>
       </Pressable>
       <Pressable
@@ -140,7 +141,7 @@ export default function RestoreScreen() {
         style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
       >
         <Text style={[type.body, { color: theme.textMuted }]}>
-          {payload ? 'Choose a different file' : 'Back'}
+          {payload ? 'Wybierz inny plik' : 'Wstecz'}
         </Text>
       </Pressable>
     </View>

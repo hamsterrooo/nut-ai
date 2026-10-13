@@ -7,8 +7,8 @@ import { nextRoute, stepIndex, TOTAL_STEPS } from '../../src/onboarding/flow'
 import { setAnswer, useAnswers } from '../../src/onboarding/store'
 
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec',
+  'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień',
 ]
 
 /** Days in a month, so 31 February can never be selected. */
@@ -45,8 +45,8 @@ export default function BirthScreen() {
     <OnboardingScreen
       step={stepIndex('birth')}
       total={TOTAL_STEPS}
-      title="When were you born?"
-      subtitle="This will be taken into account when calculating your daily nutrition goals."
+      title="Podaj datę urodzenia"
+      subtitle="Uwzględnimy to przy obliczaniu Twoich dziennych celów żywieniowych."
       onCta={() => {
         if (a.birthYear == null) {
           setAnswer('birthYear', year)
@@ -59,7 +59,7 @@ export default function BirthScreen() {
       <View style={{ marginTop: 96 }}>
         <WheelHighlight>
           <Wheel
-            label="Month"
+            label="Miesiąc"
             items={months}
             value={month}
             width={150}
@@ -71,14 +71,14 @@ export default function BirthScreen() {
             }}
           />
           <Wheel
-            label="Day"
+            label="Dzień"
             items={days}
             value={day}
             width={70}
             onChange={(v) => setAnswer('birthDay', v)}
           />
           <Wheel
-            label="Year"
+            label="Rok"
             items={years}
             value={year}
             width={110}

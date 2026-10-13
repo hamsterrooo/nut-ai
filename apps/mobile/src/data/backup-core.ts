@@ -1,3 +1,4 @@
+import { pluralPl } from '../i18n/format'
 import type { DbAdapter, SqlValue } from '@nutai/db-adapter'
 
 /**
@@ -195,9 +196,9 @@ export async function importBackupPayload(
 export function describeBackup(payload: BackupPayload): string {
   const count = (t: string) => payload.tables[t]?.length ?? 0
   const parts: string[] = []
-  if (count('meals')) parts.push(`${count('meals')} meals`)
-  if (count('weight_entries')) parts.push(`${count('weight_entries')} weigh-ins`)
-  if (count('exercise_entries')) parts.push(`${count('exercise_entries')} workouts`)
-  if (count('saved_meals')) parts.push(`${count('saved_meals')} saved foods`)
-  return parts.length ? parts.join(' · ') : 'settings and goals only'
+  if (count('meals')) parts.push(`${count('meals')} ${pluralPl(count('meals'), 'posiłek', 'posiłki', 'posiłków')}`)
+  if (count('weight_entries')) parts.push(`${count('weight_entries')} ${pluralPl(count('weight_entries'), 'ważenie', 'ważenia', 'ważeń')}`)
+  if (count('exercise_entries')) parts.push(`${count('exercise_entries')} ${pluralPl(count('exercise_entries'), 'trening', 'treningi', 'treningów')}`)
+  if (count('saved_meals')) parts.push(`${count('saved_meals')} ${pluralPl(count('saved_meals'), 'zapisany produkt', 'zapisane produkty', 'zapisanych produktów')}`)
+  return parts.length ? parts.join(' · ') : 'tylko ustawienia i cele'
 }

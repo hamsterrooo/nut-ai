@@ -1,3 +1,4 @@
+import { formatDecimal } from '../i18n/format'
 import * as Clipboard from 'expo-clipboard'
 import { useState } from 'react'
 import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
@@ -94,7 +95,7 @@ export function CredentialForm({
               style={[styles.tab, kind === k && { backgroundColor: theme.bgElevated }]}
             >
               <Text style={[type.label, { color: kind === k ? theme.text : theme.textMuted }]}>
-                {k === 'api_key' ? 'API key' : 'Claude CLI token'}
+                {k === 'api_key' ? 'Klucz API' : 'Token Claude CLI'}
               </Text>
             </Pressable>
           ))}
@@ -104,9 +105,9 @@ export function CredentialForm({
       <View style={[styles.how, { backgroundColor: theme.bgSunken }]}>
         {provider === 'anthropic' && kind === 'oauth' ? (
           <>
-            <Text style={[type.bodyStrong, { color: theme.text }]}>Sign in through the Claude CLI</Text>
+            <Text style={[type.bodyStrong, { color: theme.text }]}>Zaloguj się przez Claude CLI</Text>
             <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
-              On a computer with Claude Code installed, run this and paste what it prints:
+              Na komputerze z zainstalowanym Claude Code uruchom to polecenie i wklej to, co wypisze:
             </Text>
             <Pressable
               onPress={() => void Clipboard.setStringAsync('claude setup-token')}
@@ -116,33 +117,33 @@ export function CredentialForm({
               <Icon name="bookmark" size={16} color={theme.textFaint} />
             </Pressable>
             <Text style={[type.caption, { color: theme.textFaint, marginTop: space.sm, lineHeight: 18 }]}>
-              This uses your existing Claude subscription instead of API credit. The check below
-              proves it can actually run scans, not just log in.
+              To korzysta z Twojej istniejącej subskrypcji Claude zamiast kredytu API. Sprawdzenie
+              poniżej potwierdza, że token naprawdę potrafi wykonywać skany, a nie tylko się logować.
             </Text>
           </>
         ) : (
           <>
             <Text style={[type.bodyStrong, { color: theme.text }]}>
-              Get a key from {PROVIDER_NAME[provider]}
+              Weź klucz od {PROVIDER_NAME[provider]}
             </Text>
             <Pressable
               onPress={() => void Linking.openURL(CONSOLE_URL[provider])}
               style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.sm }}
             >
-              <Text style={[type.label, { color: theme.protein }]}>Open the console</Text>
+              <Text style={[type.label, { color: theme.protein }]}>Otwórz konsolę</Text>
               <Icon name="chevron" size={14} color={theme.protein} />
             </Pressable>
             <Text style={[type.caption, { color: theme.textFaint, marginTop: space.sm, lineHeight: 18 }]}>
-              Billing is between you and {PROVIDER_NAME[provider]}. We never see the key, and there
-              is no account here to attach it to.
+              Rozliczenia to sprawa między Tobą a {PROVIDER_NAME[provider]}. Nigdy nie widzimy klucza,
+              a tutaj nie ma konta, do którego można by go przypiąć.
             </Text>
           </>
         )}
       </View>
 
       <TextInput
-        accessibilityLabel="API credential"
-        placeholder={kind === 'oauth' ? 'Paste the token' : 'sk-…'}
+        accessibilityLabel="Poświadczenie API"
+        placeholder={kind === 'oauth' ? 'Wklej token' : 'sk-…'}
         placeholderTextColor={theme.textFaint}
         value={value}
         onChangeText={(t) => {
@@ -179,11 +180,11 @@ export function CredentialForm({
         <View style={[styles.result, { backgroundColor: theme.uncertainBg }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
             <Icon name="check" size={18} color={theme.affirm} weight={2.4} />
-            <Text style={[type.bodyStrong, { color: theme.text }]}>Key works</Text>
+            <Text style={[type.bodyStrong, { color: theme.text }]}>Klucz działa</Text>
           </View>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
-            Verified as {shape === 'bearer' ? 'an OAuth / CLI token' : 'an API key'}. Using{' '}
-            {model.label} at roughly ${model.approxScanCostUsd.toFixed(4)} per scan.
+            Zweryfikowano jako {shape === 'bearer' ? 'token OAuth / CLI' : 'klucz API'}. Używany model:{' '}
+            {model.label}, ok. {formatDecimal(model.approxScanCostUsd, 4)} $ za skan.
           </Text>
         </View>
       ) : (
@@ -198,7 +199,7 @@ export function CredentialForm({
           ]}
         >
           <Text style={[type.bodyStrong, { color: theme.bg }]}>
-            {busy ? 'Checking…' : 'Verify and save'}
+            {busy ? 'Sprawdzanie…' : 'Sprawdź i zapisz'}
           </Text>
         </Pressable>
       )}
@@ -210,15 +211,15 @@ export function CredentialForm({
 function explain(kind: string, fallback: string): string {
   switch (kind) {
     case 'key-invalid':
-      return 'That credential was rejected. Check you copied the whole thing, and that the tab above matches its type — an API key and a CLI token use different headers.'
+      return 'To poświadczenie zostało odrzucone. Sprawdź, czy skopiowano całość i czy zakładka powyżej pasuje do jego typu: klucz API i token CLI używają innych nagłówków.'
     case 'quota-exhausted':
-      return 'The credential works, but the account is out of credit. Add billing with your provider and try again.'
+      return 'Poświadczenie działa, ale na koncie skończył się kredyt. Dodaj płatności u dostawcy i spróbuj ponownie.'
     case 'model-unavailable':
-      return 'The credential works, but that model is not enabled for this account. Some models need billing history before they unlock.'
+      return 'Poświadczenie działa, ale ten model nie jest włączony dla tego konta. Niektóre modele wymagają historii płatności, zanim się odblokują.'
     case 'offline':
-      return 'No connection to the provider. Nothing was saved — try again when you are back online.'
+      return 'Brak połączenia z dostawcą. Nic nie zostało zapisane, spróbuj ponownie, gdy wrócisz do sieci.'
     case 'timeout-ambiguous':
-      return 'The check timed out. Nothing was saved.'
+      return 'Sprawdzanie przekroczyło limit czasu. Nic nie zostało zapisane.'
     default:
       return fallback
   }

@@ -20,18 +20,18 @@ export default function ThanksScreen() {
           <Icon name="check" size={72} color={theme.text} weight={1.4} />
         </View>
 
-        <Text style={[styles.heading, { color: theme.text }]}>Thank you for trusting us!</Text>
+        <Text style={[styles.heading, { color: theme.text }]}>Dziękujemy za zaufanie!</Text>
         <Text style={[type.body, { color: theme.textMuted, textAlign: 'center', marginTop: space.md }]}>
-          Now let's personalize Nut AI for you...
+          Teraz spersonalizujemy Nut AI dla Ciebie...
         </Text>
 
         <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
           <Text style={[type.bodyStrong, { color: theme.text, textAlign: 'center' }]}>
-            Personalized to your goals
+            Dopasowane do Twoich celów
           </Text>
           <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center', marginTop: space.xs }]}>
-            Your answers set your targets, bias how we match your food, and decide which parts of
-            the app are switched on.
+            Twoje odpowiedzi ustalają Twoje cele, wpływają na dopasowywanie produktów i decydują,
+            które części aplikacji są włączone.
           </Text>
         </View>
       </View>

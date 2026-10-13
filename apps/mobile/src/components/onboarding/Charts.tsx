@@ -58,7 +58,7 @@ export function TrendComparisonChart({ gaining }: { gaining: boolean }) {
 
   return (
     <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
-      <Text style={[type.heading, { color: theme.text }]}>Weight trend</Text>
+      <Text style={[type.heading, { color: theme.text }]}>Trend wagi</Text>
 
       <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginTop: space.md }}>
         <Defs>
@@ -83,16 +83,16 @@ export function TrendComparisonChart({ gaining }: { gaining: boolean }) {
         <View style={[styles.pill, { backgroundColor: theme.text }]}>
           <Text style={[type.micro, { color: theme.bg }]}>Nut AI</Text>
         </View>
-        <Text style={[type.caption, { color: '#E8615A' }]}>Without a plan</Text>
+        <Text style={[type.caption, { color: '#E8615A' }]}>Bez planu</Text>
       </View>
 
       <View style={styles.axisRow}>
-        <Text style={[type.caption, { color: theme.textMuted }]}>Month 1</Text>
-        <Text style={[type.caption, { color: theme.textMuted }]}>Month 6</Text>
+        <Text style={[type.caption, { color: theme.textMuted }]}>Miesiąc 1</Text>
+        <Text style={[type.caption, { color: theme.textMuted }]}>Miesiąc 6</Text>
       </View>
 
       <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center', marginTop: space.md }]}>
-        Track your habits and stay consistent over time.
+        Śledź swoje nawyki i zachowaj systematyczność w czasie.
       </Text>
     </View>
   )
@@ -108,7 +108,7 @@ export function TransitionChart({ gaining }: { gaining: boolean }) {
 
   return (
     <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
-      <Text style={[type.heading, { color: theme.text }]}>Your weight transition</Text>
+      <Text style={[type.heading, { color: theme.text }]}>Twoja zmiana wagi</Text>
 
       <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginTop: space.md }}>
         <Defs>
@@ -131,13 +131,13 @@ export function TransitionChart({ gaining }: { gaining: boolean }) {
       </Svg>
 
       <View style={styles.axisRow}>
-        <Text style={[type.caption, { color: theme.textMuted }]}>3 Days</Text>
-        <Text style={[type.caption, { color: theme.textMuted }]}>7 Days</Text>
-        <Text style={[type.caption, { color: theme.textMuted }]}>30 Days</Text>
+        <Text style={[type.caption, { color: theme.textMuted }]}>3 dni</Text>
+        <Text style={[type.caption, { color: theme.textMuted }]}>7 dni</Text>
+        <Text style={[type.caption, { color: theme.textMuted }]}>30 dni</Text>
       </View>
 
       <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center', marginTop: space.md }]}>
-        Weight change takes time. Consistency in the early weeks matters most.
+        Zmiana wagi wymaga czasu. Najważniejsza jest systematyczność w pierwszych tygodniach.
       </Text>
     </View>
   )
@@ -162,7 +162,7 @@ export function ProgressChart({
 
   return (
     <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
-      <Text style={[type.heading, { color: theme.text }]}>Estimated progress</Text>
+      <Text style={[type.heading, { color: theme.text }]}>Szacowany postęp</Text>
 
       <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginTop: space.md }}>
         <Defs>
@@ -184,12 +184,12 @@ export function ProgressChart({
 
       <View style={[styles.callout, { backgroundColor: theme.bgElevated, borderColor: theme.text }]}>
         <Text style={[type.caption, { color: theme.text, fontWeight: '700', textAlign: 'center' }]}>
-          Target{'\n'}{targetLabel}
+          Cel{'\n'}{targetLabel}
         </Text>
       </View>
 
       <View style={styles.axisRow}>
-        <Text style={[type.caption, { color: theme.text, fontWeight: '700' }]}>Now</Text>
+        <Text style={[type.caption, { color: theme.text, fontWeight: '700' }]}>Teraz</Text>
         <Text style={[type.caption, { color: theme.text, fontWeight: '700' }]}>{dateLabel}</Text>
       </View>
     </View>

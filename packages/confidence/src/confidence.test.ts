@@ -68,7 +68,7 @@ describe('the model self-report is a modifier, never the signal', () => {
     const sure = computeBand({ ...base, row: row(), item: item({ portion_confidence: 0.9 }) })
     const unsure = computeBand({ ...base, row: row(), item: item({ portion_confidence: 0.2 }) })
     expect(unsure.halfPct).toBeGreaterThan(sure.halfPct)
-    expect(unsure.reasons.join(' ')).toMatch(/unsure/)
+    expect(unsure.reasons.join(' ')).toMatch(/nie jest pewien/)
   })
 
   it('gives a labeled packaged item a genuinely tight band', () => {
@@ -89,7 +89,7 @@ describe('structural widening', () => {
       ...base, row: row(), item: item({ canonical_food_key: 'chicken stir fry with vegetables' }),
     })
     expect(mixed.halfPct).toBeGreaterThan(simple.halfPct)
-    expect(mixed.reasons.join(' ')).toMatch(/Mixed dishes/)
+    expect(mixed.reasons.join(' ')).toMatch(/Dania mieszane/)
   })
 
   it('widens ground meat for the 62-77% yield spread', () => {
@@ -106,14 +106,14 @@ describe('structural widening', () => {
       ...base, row: row(),
       item: item({ is_beverage: true, beverage_category: 'alcoholic_poured_or_mixed', canonical_food_key: 'beer' }),
     })
-    expect(b.reasons.join(' ')).toMatch(/alcohol content/)
+    expect(b.reasons.join(' ')).toMatch(/Zawartości alkoholu/)
   })
 
   it('widens fried food for oil absorption', () => {
     const b = computeBand({
       ...base, row: row(), item: item({ cooking_method_cues: ['deep_fried_color'] }),
     })
-    expect(b.reasons.join(' ')).toMatch(/absorbs/)
+    expect(b.reasons.join(' ')).toMatch(/wchłania/)
   })
 
   it('widens on the local path, because a closed vocabulary is a real constraint', () => {
@@ -150,8 +150,8 @@ describe('narrowing is earned, not assumed', () => {
       secondOpinion: { gramsFor: () => 300 },
     })
     expect(agree.halfPct).toBeLessThan(disagree.halfPct)
-    expect(agree.reasons.join(' ')).toMatch(/agreed/)
-    expect(disagree.reasons.join(' ')).toMatch(/disagreed/)
+    expect(agree.reasons.join(' ')).toMatch(/zgodziły się/)
+    expect(disagree.reasons.join(' ')).toMatch(/nie zgodziły się/)
   })
 })
 
@@ -164,7 +164,7 @@ describe('clamp flags floor the band and never narrow it', () => {
       hadClampFlag: true,
     })
     expect(b.halfPct).toBeGreaterThanOrEqual(0.5)
-    expect(b.reasons.join(' ')).toMatch(/please check it/)
+    expect(b.reasons.join(' ')).toMatch(/sprawdź go/)
   })
 
   it('never displays a band wider than the cap', () => {

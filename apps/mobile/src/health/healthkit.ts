@@ -89,7 +89,7 @@ export interface AuthResult {
  */
 export async function requestPermissions(): Promise<AuthResult> {
   const hk = await load()
-  if (!hk) return { prompted: false, canWrite: false, error: 'HealthKit is not available in this build.' }
+  if (!hk) return { prompted: false, canWrite: false, error: 'HealthKit nie jest dostępny w tej wersji aplikacji.' }
 
   try {
     // v14 takes ONE object with toRead / toShare, not two positional arrays.

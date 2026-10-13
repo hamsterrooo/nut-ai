@@ -44,12 +44,12 @@ export function ConfidenceChip({
 
   const label = expanded
     ? `${Math.round(low)}–${Math.round(high)} ${unit}`
-    : 'Estimate — tap for range'
+    : 'Szacunek, dotknij po zakres'
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Estimated ${Math.round(value)} ${unit}, likely between ${Math.round(low)} and ${Math.round(high)}. Tap for why.`}
+      accessibilityLabel={`Szacunek: ${Math.round(value)} ${unit}, prawdopodobnie między ${Math.round(low)} a ${Math.round(high)}. Dotknij, aby zobaczyć dlaczego.`}
       onPress={onPress}
       hitSlop={space.sm}
       style={[styles.chip, { backgroundColor: theme.uncertainBg }]}

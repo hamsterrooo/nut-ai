@@ -1,3 +1,4 @@
+import { formatInteger, pluralPl } from '../../src/i18n/format'
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
 import {
@@ -25,7 +26,7 @@ import {
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
 
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAY_LABELS = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb']
 
 /**
  * Home.
@@ -76,7 +77,7 @@ export default function Home() {
   if (!goal || !totals) {
     return (
       <View style={[styles.center, { backgroundColor: theme.bg }]}>
-        <Text style={[type.body, { color: theme.textMuted }]}>Loading your day…</Text>
+        <Text style={[type.body, { color: theme.textMuted }]}>Wczytywanie dnia…</Text>
       </View>
     )
   }
@@ -126,7 +127,7 @@ export default function Home() {
                 {Math.abs(Math.round(remaining))}
               </Text>
               <Text style={[type.body, { color: theme.textMuted }]}>
-                {over ? 'Calories over' : 'Calories left'}
+                {over ? 'Kalorie ponad cel' : 'Pozostało kalorii'}
               </Text>
             </View>
             <Ring pct={pct} over={over} size={128} stroke={12}>
@@ -135,30 +136,30 @@ export default function Home() {
           </View>
 
           <View style={styles.macroRow}>
-            <MacroCard label="Protein" icon="protein" eaten={totals.protein_g} target={goal.protein_g} color={theme.protein} />
-            <MacroCard label="Carbs" icon="carbs" eaten={totals.carbs_g} target={goal.carbs_g} color={theme.carbs} />
-            <MacroCard label="Fat" icon="fat" eaten={totals.fat_g} target={goal.fat_g} color={theme.fat} />
+            <MacroCard label="Białko" icon="protein" eaten={totals.protein_g} target={goal.protein_g} color={theme.protein} />
+            <MacroCard label="Węglowodany" icon="carbs" eaten={totals.carbs_g} target={goal.carbs_g} color={theme.carbs} />
+            <MacroCard label="Tłuszcz" icon="fat" eaten={totals.fat_g} target={goal.fat_g} color={theme.fat} />
           </View>
         </View>
 
         {/* Page 2 — micros and the health score */}
         <View style={{ width, paddingHorizontal: space.lg }}>
           <View style={styles.macroRow}>
-            <MacroCard label="Fiber" icon="fiber" eaten={0} target={30} color="#8B7BD8" unit="g" />
-            <MacroCard label="Sugar" icon="sugar" eaten={0} target={50} color="#E88BA8" unit="g" />
-            <MacroCard label="Sodium" icon="sodium" eaten={0} target={2300} color="#D6A648" unit="mg" />
+            <MacroCard label="Błonnik" icon="fiber" eaten={0} target={30} color="#8B7BD8" unit="g" />
+            <MacroCard label="Cukry" icon="sugar" eaten={0} target={50} color="#E88BA8" unit="g" />
+            <MacroCard label="Sód" icon="sodium" eaten={0} target={2300} color="#D6A648" unit="mg" />
           </View>
 
           <View style={[styles.card, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
             <View style={styles.spread}>
-              <Text style={[type.heading, { color: theme.text }]}>Health Score</Text>
-              <Text style={[type.heading, { color: theme.textMuted }]}>N/A</Text>
+              <Text style={[type.heading, { color: theme.text }]}>Ocena zdrowotności</Text>
+              <Text style={[type.heading, { color: theme.textMuted }]}>brak</Text>
             </View>
             <View style={[styles.scoreTrack, { backgroundColor: theme.ringTrack }]} />
             <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 19 }]}>
-              Log a few foods to generate today's score. Unlike the app we're replacing, the
-              formula is published and readable — it is arithmetic over what you logged, not an
-              opaque "AI" number.
+              Zapisz kilka produktów, aby wygenerować dzisiejszą ocenę. W odróżnieniu od aplikacji,
+              którą zastępujemy, wzór jest opublikowany i czytelny: to arytmetyka na tym, co
+              zapisano, a nie nieprzejrzysta liczba „AI”.
             </Text>
           </View>
         </View>
@@ -167,10 +168,10 @@ export default function Home() {
         <View style={{ width, paddingHorizontal: space.lg }}>
           <View style={{ flexDirection: 'row', gap: space.md }}>
             <View style={[styles.card, { flex: 1, backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
-              <Text style={[type.caption, { color: theme.textMuted }]}>Steps</Text>
+              <Text style={[type.caption, { color: theme.textMuted }]}>Kroki</Text>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
                 <Text style={[styles.mid, { color: theme.text }]}>—</Text>
-                <Text style={[type.caption, { color: theme.textFaint }]}>/10,000</Text>
+                <Text style={[type.caption, { color: theme.textFaint }]}>/10 000</Text>
               </View>
               <View style={{ alignItems: 'center', marginTop: space.md }}>
                 <Ring pct={0} over={false} size={92} stroke={9}>
@@ -178,22 +179,22 @@ export default function Home() {
                 </Ring>
               </View>
               <Text style={[type.micro, { color: theme.textFaint, marginTop: space.sm }]}>
-                Needs Apple Health
+                Wymaga Apple Zdrowie
               </Text>
             </View>
 
             <View style={[styles.card, { flex: 1, backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
-              <Text style={[type.caption, { color: theme.textMuted }]}>Calories burned</Text>
+              <Text style={[type.caption, { color: theme.textMuted }]}>Spalone kalorie</Text>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
                 <Text style={[styles.mid, { color: theme.text }]}>—</Text>
-                <Text style={[type.caption, { color: theme.textFaint }]}>cal</Text>
+                <Text style={[type.caption, { color: theme.textFaint }]}>kcal</Text>
               </View>
               <Pressable
                 onPress={() => router.push('/log-exercise' as never)}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.lg }}
               >
                 <Icon name="dumbbell" size={18} color={theme.protein} />
-                <Text style={[type.label, { color: theme.protein }]}>Log exercise</Text>
+                <Text style={[type.label, { color: theme.protein }]}>Dodaj trening</Text>
               </Pressable>
             </View>
           </View>
@@ -203,12 +204,12 @@ export default function Home() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
                 <Icon name="water" size={22} color={theme.protein} />
                 <View>
-                  <Text style={[type.caption, { color: theme.textMuted }]}>Water</Text>
-                  <Text style={[type.bodyStrong, { color: theme.text }]}>0 fl oz</Text>
+                  <Text style={[type.caption, { color: theme.textMuted }]}>Woda</Text>
+                  <Text style={[type.bodyStrong, { color: theme.text }]}>0 ml</Text>
                 </View>
               </View>
               <Pressable style={[styles.ghost, { borderColor: theme.border }]}>
-                <Text style={[type.label, { color: theme.text }]}>Log Water</Text>
+                <Text style={[type.label, { color: theme.text }]}>Dodaj wodę</Text>
               </Pressable>
             </View>
           </View>
@@ -230,14 +231,14 @@ export default function Home() {
         <View style={[styles.card, { backgroundColor: theme.bgSunken, borderColor: 'transparent' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
             <Icon name="target" size={18} color={theme.text} />
-            <Text style={[type.bodyStrong, { color: theme.text }]}>Your target</Text>
+            <Text style={[type.bodyStrong, { color: theme.text }]}>Twój cel</Text>
           </View>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
             {adaptive?.surfaced
-              ? `Updated to ${Math.round(adaptive.newKcal ?? 0)} kcal. ${adaptive.explanation}`
+              ? `Zaktualizowano do ${formatInteger(adaptive.newKcal ?? 0)} kcal. ${adaptive.explanation}`
               : goal.adaptive
-                ? (adaptive?.reason ?? 'Adapting from your own trend and intake.')
-                : 'Fixed — you set this by hand, so we leave it alone.'}
+                ? (adaptive?.reason ?? 'Dostosowuje się do Twojego trendu i spożycia.')
+                : 'Stały: ustawiono go ręcznie, więc go nie ruszamy.'}
           </Text>
           <Pressable
             onPress={() => router.push('/log-weight' as never)}
@@ -245,14 +246,14 @@ export default function Home() {
             style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.md }}
           >
             <Icon name="scale" size={16} color={theme.protein} />
-            <Text style={[type.label, { color: theme.protein }]}>Log today's weight</Text>
+            <Text style={[type.label, { color: theme.protein }]}>Zapisz dzisiejszą wagę</Text>
           </Pressable>
         </View>
       </View>
 
       {/* Recently uploaded */}
       <View style={{ paddingHorizontal: space.lg, marginTop: space.xl }}>
-        <Text style={[type.title, { color: theme.text, fontSize: 24 }]}>Recently uploaded</Text>
+        <Text style={[type.title, { color: theme.text, fontSize: 24 }]}>Ostatnio dodane</Text>
 
         {empty ? (
           <View style={[styles.emptyCard, { backgroundColor: theme.bgSunken }]}>
@@ -264,17 +265,17 @@ export default function Home() {
               </View>
             </View>
             <Text style={[type.body, { color: theme.textMuted, textAlign: 'center', marginTop: space.lg }]}>
-              Tap + to add your first meal of the day
+              Dotknij +, aby dodać pierwszy posiłek dnia
             </Text>
           </View>
         ) : (
           <View style={[styles.card, { backgroundColor: theme.bgSunken, borderColor: 'transparent' }]}>
             <Text style={[type.bodyStrong, { color: theme.text }]}>
-              {totals.mealCount} {totals.mealCount === 1 ? 'meal' : 'meals'} logged
+              Zapisano: {totals.mealCount} {pluralPl(totals.mealCount, 'posiłek', 'posiłki', 'posiłków')}
             </Text>
             {totals.pendingCount > 0 ? (
               <Text style={[type.caption, { color: theme.uncertain, marginTop: space.xs }]}>
-                +{totals.pendingCount} still analyzing — not counted yet
+                +{totals.pendingCount} w trakcie analizy, jeszcze nie liczone
               </Text>
             ) : null}
           </View>
@@ -397,7 +398,7 @@ function MacroCard({
         {Math.round(left)}
         {unit}
       </Text>
-      <Text style={[type.caption, { color: theme.textMuted }]}>{label} left</Text>
+      <Text style={[type.caption, { color: theme.textMuted }]}>Pozostało: {label.toLowerCase()}</Text>
 
       <View style={{ alignItems: 'center', marginTop: space.md }}>
         <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>

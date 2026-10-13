@@ -10,7 +10,7 @@ export default function TrendScreen() {
     <OnboardingScreen
       step={stepIndex('trend')}
       total={TOTAL_STEPS}
-      title="Designed to help you stay on track"
+      title="Stworzone, by pomóc Ci trzymać kurs"
       onCta={() => router.push(nextRoute('trend') as never)}
       scroll
     >

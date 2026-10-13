@@ -10,20 +10,26 @@ import type { ProviderId, ProviderRequest } from './providers.js'
  * "helpfully" normalizing a label's numbers to what it believes they should be.
  */
 
-export const LABEL_SCAN_PROMPT_VERSION = 'label-scan-v1'
+export const LABEL_SCAN_PROMPT_VERSION = 'label-scan-v2-pl'
 
 export const LABEL_SCAN_INSTRUCTION = [
-  'The photo shows a printed nutrition facts label. TRANSCRIBE it — copy the numbers exactly as printed. Do not estimate, correct, or normalize anything, even if a printed value looks wrong to you.',
+  'The photo shows a printed nutrition label from a product sold in Poland (EU format, usually Polish: "Wartość odżywcza", "Informacja żywieniowa"). TRANSCRIBE it — copy the numbers exactly as printed. Do not estimate, correct, or normalize anything, even if a printed value looks wrong to you.',
+  '',
+  'Polish label vocabulary: Energia (kJ / kcal), Tłuszcz, w tym kwasy tłuszczowe nasycone, Węglowodany, w tym cukry, Błonnik, Białko, Sól. "Na 100 g" / "w 100 g" / "na 100 ml" is the reference column; "na porcję" / "w porcji" / "1 porcja (30 g)" is the serving column.',
   '',
   'Rules:',
-  '- Values are PER SERVING as printed, not per container.',
-  '- serving_g is the gram figure printed with the serving size, e.g. the 170 in "3/4 cup (170g)". If no gram figure is printed anywhere, set it to null — never infer one.',
+  '- Which column: if the label prints a per-serving column AND the gram weight of that serving, use the per-serving column, set serving_g to that weight and serving_desc to the printed text (e.g. "1 porcja (30 g)"). Otherwise use the per-100 g (or per-100 ml) column, set serving_g to 100 and serving_desc to "100 g" (or "100 ml"). Never mix columns.',
+  '- Energy: calories_kcal is the kcal figure. If only kJ is printed, set calories_kcal to 0 and put the kJ in energy_kj; the app converts it. If both are printed, fill both.',
+  '- Salt: the EU panel prints SALT (Sól) in grams, not sodium. Put it in salt_g exactly as printed and leave sodium_mg null. Only fill sodium_mg if the label itself prints sodium (Sód).',
+  '- "Fat, of which saturates" and "Carbohydrate, of which sugars": fat_g is TOTAL fat and carbs_g is TOTAL carbohydrate; the "w tym" lines are sub-items, never added on top. sugar_g is the "w tym cukry" line.',
+  '- Polish decimals use a comma: "3,5" means 3.5. A "<" value (e.g. "<0,5") is copied as its upper bound number.',
+  '- serving_g is only a gram figure printed with the serving or the 100 g reference; never infer one from the net weight of the package.',
   '- A nutrient the label does not list is null. A printed 0 is 0. These are different.',
-  '- product_name only if a product name is visible in the photo; otherwise null.',
+  '- product_name only if a product name is visible in the photo, copied as printed; otherwise null.',
   '- If the photo does not show a legible nutrition label, set every field to null and per_serving values to 0.',
   '',
   'Respond with ONLY this JSON object:',
-  '{"product_name": string|null, "serving_desc": string|null, "serving_g": number|null, "servings_per_container": number|null, "per_serving": {"calories_kcal": number, "protein_g": number, "carbs_g": number, "fat_g": number, "fiber_g": number|null, "sugar_g": number|null, "sodium_mg": number|null}}',
+  '{"product_name": string|null, "serving_desc": string|null, "serving_g": number|null, "servings_per_container": number|null, "per_serving": {"calories_kcal": number, "energy_kj": number|null, "protein_g": number, "carbs_g": number, "fat_g": number, "fiber_g": number|null, "sugar_g": number|null, "sodium_mg": number|null, "salt_g": number|null}}',
 ].join('\n')
 
 export interface LabelScanInput {

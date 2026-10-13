@@ -32,7 +32,7 @@ import type { ProviderId } from '@nutai/prompt'
  */
 
 export type WorkoutFrequency = '0-2' | '3-5' | '6+'
-export type UnitSystem = 'imperial' | 'metric'
+export type UnitSystem = 'metric'
 
 export type DietStyle =
   | 'balanced'
@@ -86,7 +86,7 @@ const EMPTY: OnboardingAnswers = {
   birthDay: null,
   heightCm: null,
   weightKg: null,
-  units: 'imperial',
+  units: 'metric',
   worksWithProfessional: null,
   goal: null,
   desiredWeightKg: null,
@@ -181,44 +181,65 @@ export interface DietBias {
 }
 
 export const DIET_BIAS: Record<DietStyle, DietBias> = {
-  balanced: { demote: null, defaultMilk: 'whole', defaultFat: 'vegetable oil', label: 'Balanced' },
+  balanced: { demote: null, defaultMilk: 'whole', defaultFat: 'vegetable oil', label: 'Zbilansowana' },
   whole_food: {
     demote: /\b(candy|soda|chips|processed|instant)\b/i,
     defaultMilk: 'whole',
     defaultFat: 'olive oil',
-    label: 'Whole-food focus',
+    label: 'Nieprzetworzona żywność',
   },
   mediterranean: {
     demote: /\b(bacon|sausage|processed)\b/i,
     defaultMilk: 'whole',
     defaultFat: 'olive oil',
-    label: 'Mediterranean',
+    label: 'Śródziemnomorska',
   },
   flexitarian: {
     demote: /\b(beef|pork|lamb)\b/i,
     defaultMilk: 'whole',
     defaultFat: 'olive oil',
-    label: 'Flexitarian',
+    label: 'Fleksitariańska',
   },
   pescatarian: {
     demote: /\b(beef|pork|chicken|turkey|lamb|bacon)\b/i,
     defaultMilk: 'whole',
     defaultFat: 'olive oil',
-    label: 'Pescatarian',
+    label: 'Peskatariańska',
   },
   vegetarian: {
     demote: /\b(beef|pork|chicken|turkey|lamb|fish|salmon|tuna|bacon|shrimp)\b/i,
     defaultMilk: 'whole',
     defaultFat: 'vegetable oil',
-    label: 'Vegetarian',
+    label: 'Wegetariańska',
   },
   vegan: {
     demote: /\b(beef|pork|chicken|turkey|lamb|fish|salmon|tuna|bacon|shrimp|cheese|milk|butter|egg|yogurt|cream)\b/i,
     defaultMilk: 'oat',
     defaultFat: 'vegetable oil',
-    label: 'Vegan',
+    label: 'Wegańska',
   },
 }
+
+/** Polish display names for values that are otherwise internal keys. */
+export const ACTIVITY_LABEL_PL: Record<string, string> = {
+  sedentary: 'siedzący tryb życia',
+  light: 'niska aktywność',
+  moderate: 'umiarkowana aktywność',
+  active: 'wysoka aktywność',
+  very_active: 'bardzo wysoka aktywność',
+}
+
+export const MILK_LABEL_PL: Record<string, string> = {
+  whole: 'pełne',
+  oat: 'owsiane',
+}
+
+export const TODAY_EMPHASIS_LABEL_PL = {
+  calories: 'kalorie',
+  protein: 'białko',
+  streak: 'serię dni',
+  neutral: 'neutralny widok',
+} as const
 
 /** Which retention surfaces default ON, driven by the stated blocker. */
 export interface FeatureDefaults {
@@ -274,17 +295,21 @@ export function todayEmphasisFor(a: Accomplish | null): 'calories' | 'protein' |
   }
 }
 
+/**
+ * Pounds per kilogram. The app itself is metric-only; this exists solely to feed
+ * @nutai/goals, whose calorie arithmetic is written in pounds per week.
+ */
 export const LB_PER_KG = 2.20462
 
 /**
  * Weight change below this is treated as "maintain".
  *
- * 2 lb is inside the range a single day of water, salt and timing can move you,
- * so a target within 2 lb of today is not a direction — it is the same weight
+ * 1 kg is inside the range a single day of water, salt and timing can move you,
+ * so a target within 1 kg of today is not a direction — it is the same weight
  * measured twice. Asking someone to also declare a goal after they have already
  * told us both numbers is asking them to repeat themselves.
  */
-export const MAINTAIN_THRESHOLD_LB = 2
+export const MAINTAIN_THRESHOLD_KG = 1
 
 /**
  * The goal, inferred.
@@ -297,10 +322,10 @@ export function inferredGoal(a: Pick<OnboardingAnswers, 'weightKg' | 'desiredWei
   const current = a.weightKg
   const target = a.desiredWeightKg
   if (current == null || target == null) return 'maintain'
-  const deltaLb = (target - current) * LB_PER_KG
-  if (Math.abs(deltaLb) < MAINTAIN_THRESHOLD_LB) return 'maintain'
-  return deltaLb > 0 ? 'gain' : 'lose'
+  const deltaKg = target - current
+  if (Math.abs(deltaKg) < MAINTAIN_THRESHOLD_KG) return 'maintain'
+  return deltaKg > 0 ? 'gain' : 'lose'
 }
 
-export const lbToKg = (lb: number): number => lb / LB_PER_KG
+/** Adapter for @nutai/goals only; never shown to the user. */
 export const kgToLb = (kg: number): number => kg * LB_PER_KG

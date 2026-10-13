@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { sodiumMgFromSaltG } from './eu-units.js'
 
 /**
  * The web-lookup refinement result.
@@ -17,20 +18,30 @@ import { z } from 'zod'
  *   claim from a model guess, and the provenance field keeps them distinct.
  */
 
-export const WebLookupOptionZ = z.object({
-  /** Menu-item label as published, e.g. "Spicy Deluxe Sandwich". */
-  label: z.string().min(1),
-  /** Grams for one serving as published; null when the source lists no weight. */
-  serving_g: z.number().positive().nullable(),
-  /** Human description of the serving, e.g. "1 sandwich (232 g)". */
-  serving_desc: z.string().nullable(),
-  calories_kcal: z.number().min(0),
-  protein_g: z.number().min(0),
-  carbs_g: z.number().min(0),
-  fat_g: z.number().min(0),
-  fiber_g: z.number().min(0).nullable(),
-  sodium_mg: z.number().min(0).nullable(),
-})
+export const WebLookupOptionZ = z
+  .object({
+    /** Menu-item label as published, e.g. "Spicy Deluxe Sandwich". */
+    label: z.string().min(1),
+    /** Grams for one serving as published; null when the source lists no weight. */
+    serving_g: z.number().positive().nullable(),
+    /** Human description of the serving, e.g. "1 sandwich (232 g)". */
+    serving_desc: z.string().nullable(),
+    calories_kcal: z.number().min(0),
+    protein_g: z.number().min(0),
+    carbs_g: z.number().min(0),
+    fat_g: z.number().min(0),
+    fiber_g: z.number().min(0).nullable(),
+    sodium_mg: z.number().min(0).nullable(),
+    /**
+     * Salt in grams, for sources (EU labels, Polish retailers) that publish salt
+     * instead of sodium. Converted to sodium_mg below; never shown on its own.
+     */
+    salt_g: z.number().min(0).nullish(),
+  })
+  .transform(({ salt_g, ...o }) => ({
+    ...o,
+    sodium_mg: o.sodium_mg ?? (salt_g != null ? sodiumMgFromSaltG(salt_g) : null),
+  }))
 
 export const WebLookupResultZ = z.object({
   /** False when search found nothing usable — the item stays an AI estimate. */

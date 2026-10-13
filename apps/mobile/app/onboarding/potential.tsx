@@ -10,7 +10,7 @@ export default function PotentialScreen() {
     <OnboardingScreen
       step={stepIndex('potential')}
       total={TOTAL_STEPS}
-      title="You have great potential to crush your goal"
+      title="Masz ogromny potencjał, by zrealizować swój cel"
       onCta={() => router.push(nextRoute('potential') as never)}
       scroll
     >

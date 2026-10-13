@@ -11,23 +11,23 @@ export default function ProfessionalScreen() {
     <OnboardingScreen
       step={stepIndex('professional')}
       total={TOTAL_STEPS}
-      title="Do you currently work with a personal trainer or registered dietitian?"
+      title="Czy współpracujesz obecnie z trenerem personalnym lub dietetykiem?"
       // The real consumer: someone with a professional gets the shareable PDF
       // export surfaced, and the app stops offering its own coaching nudges —
       // it should not argue with their dietitian.
-      subtitle="If you do, we'll surface a shareable export and stay out of your coaching."
+      subtitle="Jeśli tak, pokażemy eksport do udostępnienia i nie będziemy wchodzić w drogę Twojemu coachingowi."
       ctaDisabled={a.worksWithProfessional == null}
       onCta={() => router.push(nextRoute('professional') as never)}
     >
       <ScrollView scrollEnabled={false}>
         <OptionCard
-          label="Yes"
+          label="Tak"
           glyph="thumbUp"
           selected={a.worksWithProfessional === true}
           onPress={() => setAnswer('worksWithProfessional', true)}
         />
         <OptionCard
-          label="No"
+          label="Nie"
           glyph="thumbDown"
           selected={a.worksWithProfessional === false}
           onPress={() => setAnswer('worksWithProfessional', false)}

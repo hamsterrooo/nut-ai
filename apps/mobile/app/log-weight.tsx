@@ -3,11 +3,12 @@ import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { EditableValue, RulerPicker } from '../src/components/onboarding/Controls'
-import { logWeight, setting, weightHistory } from '../src/data/repo'
+import { logWeight, weightHistory } from '../src/data/repo'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
-const LB_PER_KG = 2.20462
+const MIN_KG = 30
+const MAX_KG = 227
 
 /**
  * Log today's weight.
@@ -25,28 +26,22 @@ export default function LogWeight() {
   const { width } = useWindowDimensions()
 
   const [kg, setKg] = useState(80)
-  const [imperial, setImperial] = useState(true)
   const [saving, setSaving] = useState(false)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let alive = true
     void (async () => {
-      const [history, units] = await Promise.all([weightHistory(), setting('units', 'imperial')])
+      const history = await weightHistory()
       if (!alive) return
       const last = history[history.length - 1]
       if (last) setKg(last.weightKg)
-      setImperial(units !== 'metric')
       setReady(true)
     })()
     return () => {
       alive = false
     }
   }, [])
-
-  const shown = imperial ? kg * LB_PER_KG : kg
-  const min = imperial ? 60 : 30
-  const max = imperial ? 500 : 227
 
   async function save() {
     if (saving) return
@@ -58,37 +53,37 @@ export default function LogWeight() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg, paddingTop: insets.top + space.lg }}>
       <View style={styles.head}>
-        <Text style={[type.title, { color: theme.text }]}>Today's weight</Text>
+        <Text style={[type.title, { color: theme.text }]}>Dzisiejsza waga</Text>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={space.md}>
-          <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
+          <Text style={[type.body, { color: theme.textMuted }]}>Anuluj</Text>
         </Pressable>
       </View>
 
       <Text style={[type.caption, { color: theme.textMuted, paddingHorizontal: space.lg }]}>
-        One number, dated today. Day-to-day scale weight is mostly water — the trend line on Trends
-        is the thing worth watching, and it is what adjusts your calorie target.
+        Jedna liczba z dzisiejszą datą. Waga z dnia na dzień to głównie woda, więc warto patrzeć na
+        linię trendu w zakładce Postępy. To ona koryguje Twój cel kaloryczny.
       </Text>
 
       {ready ? (
         <>
           <View style={{ alignItems: 'center', marginTop: space.xxxl }}>
             <EditableValue
-              value={shown}
-              unit={imperial ? 'lbs' : 'kg'}
-              min={min}
-              max={max}
-              onCommit={(v) => setKg(imperial ? v / LB_PER_KG : v)}
+              value={kg}
+              unit="kg"
+              min={MIN_KG}
+              max={MAX_KG}
+              onCommit={(v) => setKg(v)}
             />
           </View>
 
           <View style={{ marginTop: space.lg }}>
             <RulerPicker
               width={width}
-              min={min}
-              max={max}
+              min={MIN_KG}
+              max={MAX_KG}
               step={0.1}
-              value={Number(shown.toFixed(1))}
-              onChange={(v) => setKg(imperial ? v / LB_PER_KG : v)}
+              value={Number(kg.toFixed(1))}
+              onChange={(v) => setKg(v)}
             />
           </View>
         </>
@@ -101,7 +96,7 @@ export default function LogWeight() {
           onPress={save}
           style={[styles.cta, { backgroundColor: saving || !ready ? theme.border : theme.text }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Save</Text>
+          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Zapisz</Text>
         </Pressable>
       </View>
     </View>

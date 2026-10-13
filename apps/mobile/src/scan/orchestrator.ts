@@ -84,15 +84,15 @@ async function preprocess(photoUri: string): Promise<string> {
 
 /** The copy for "nothing to scan with", per feature. */
 function resolveFailureCopy(err: ResolveFailure, feature: 'scan' | 'label' | 'receipt'): { message: string; failureKind: 'no-key' | 'key-invalid' } {
-  if (err.kind === 'key-missing') return { message: 'Your saved key is missing. Re-enter it in Profile.', failureKind: 'key-invalid' }
+  if (err.kind === 'key-missing') return { message: 'Brak zapisanego klucza. Wpisz go ponownie w Profilu.', failureKind: 'key-invalid' }
   if (err.kind === 'publik-disconnected') return { message: DISCONNECTED_MESSAGE, failureKind: 'no-key' }
-  const publikHint = publikAvailable() ? ' Or turn on publik API in Profile — no key needed.' : ''
+  const publikHint = publikAvailable() ? ' Możesz też włączyć publik API w Profilu, bez klucza.' : ''
   const base =
     feature === 'scan'
-      ? 'Photo scans need an API key. Add one in Profile — barcode, search and manual logging work without one.'
+      ? 'Skanowanie zdjęć wymaga klucza API. Dodaj go w Profilu. Kod kreskowy, wyszukiwanie i ręczne dodawanie działają bez niego.'
       : feature === 'label'
-        ? 'Reading a label needs an API key. Add one in Profile — or find the product by barcode or search instead.'
-        : 'Reading a receipt needs an API key. Add one in Profile.'
+        ? 'Odczyt etykiety wymaga klucza API. Dodaj go w Profilu albo znajdź produkt po kodzie kreskowym lub w wyszukiwarce.'
+        : 'Odczyt paragonu wymaga klucza API. Dodaj go w Profilu.'
   return { message: base + publikHint, failureKind: 'no-key' }
 }
 
@@ -127,7 +127,7 @@ export async function startScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
-      message: 'Could not read the photo. Try taking it again.',
+      message: 'Nie udało się odczytać zdjęcia. Zrób je ponownie.',
       canRetry: false,
     })
     return
@@ -211,7 +211,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     setPhase({
       kind: 'failed',
       photoUri,
-      message: 'The model answered in a shape we could not use. This one is on us — try once more.',
+      message: 'Model odpowiedział w formie, której nie dało się użyć. To nasza wina, spróbuj jeszcze raz.',
       canRetry: true,
       failureKind: 'schema-violation',
     })
@@ -222,7 +222,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     setPhase({
       kind: 'failed',
       photoUri,
-      message: result.refusalReason || 'That photo does not look like food.',
+      message: result.refusalReason || 'To zdjęcie nie wygląda na jedzenie.',
       canRetry: false,
     })
     return
@@ -378,10 +378,10 @@ function readyFromRows(
     tier: 'tight',
     reasons: [
       r.origin === 'label_ocr'
-        ? 'Transcribed from the printed nutrition label'
+        ? 'Przepisano z wydrukowanej etykiety wartości odżywczych'
         : r.origin === 'web_lookup'
-          ? 'Transcribed from published nutrition facts'
-          : 'Matched by barcode to a labeled product',
+          ? 'Przepisano z opublikowanych wartości odżywczych'
+          : 'Dopasowano po kodzie kreskowym do produktu z etykiety',
     ],
   }))
   const { totals, mealBand } = recomputeAfterEdit(meal, bands)
@@ -475,7 +475,7 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri: '',
-      message: 'This barcode is not in the bundled database. The Food label mode reads the printed panel directly and works without a key.',
+      message: 'Tego kodu kreskowego nie ma we wbudowanej bazie. Tryb Etykieta czyta wydrukowaną tabelę wartości odżywczych bezpośrednio, ale wymaga klucza API.',
       canRetry: false,
     })
     return
@@ -494,7 +494,7 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri: '',
-      message: 'Could not find this barcode in the database or online. Try the Food label mode — it reads the printed panel directly.',
+      message: 'Nie znaleziono tego kodu kreskowego w bazie ani w sieci. Spróbuj trybu Etykieta, który czyta wydrukowaną tabelę wartości odżywczych bezpośrednio.',
       canRetry: false,
     })
     return
@@ -545,7 +545,7 @@ export async function startLabelScan(photoUri: string): Promise<void> {
   try {
     base64 = await preprocess(photoUri)
   } catch {
-    setPhase({ kind: 'failed', photoUri, message: 'Could not read the photo. Try taking it again.', canRetry: false })
+    setPhase({ kind: 'failed', photoUri, message: 'Nie udało się odczytać zdjęcia. Zrób je ponownie.', canRetry: false })
     return
   }
   lastCapture = { photoUri, base64 }
@@ -565,7 +565,7 @@ export async function startLabelScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
-      message: outcome.error ? failureMessage(outcome.error, r) : 'The label could not be read.',
+      message: outcome.error ? failureMessage(outcome.error, r) : 'Nie udało się odczytać etykiety.',
       canRetry: outcome.error?.retryable ?? false,
       failureKind: outcome.error?.kind,
       ...(outcome.error?.action ? { action: outcome.error.action } : {}),
@@ -578,7 +578,7 @@ export async function startLabelScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
-      message: 'That does not look like a legible nutrition label. Get the whole panel in frame, flat and well lit.',
+      message: 'To nie wygląda na czytelną etykietę wartości odżywczych. Ułóż całą tabelę w kadrze, płasko i przy dobrym świetle.',
       canRetry: true,
     })
     return
@@ -587,7 +587,7 @@ export async function startLabelScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
-      message: 'The label was read, but it prints no gram weight for the serving — without it the numbers cannot be scaled honestly. Include the serving-size line in the photo if it has one.',
+      message: 'Etykietę odczytano, ale nie podaje masy porcji w gramach, a bez niej liczb nie da się uczciwie przeskalować. Jeśli jest linia z wielkością porcji lub kolumna na 100 g, ujmij ją na zdjęciu.',
       canRetry: true,
     })
     return
@@ -643,7 +643,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
   try {
     base64 = await preprocess(photoUri)
   } catch {
-    setPhase({ kind: 'failed', photoUri, message: 'Could not read the photo. Try taking it again.', canRetry: false })
+    setPhase({ kind: 'failed', photoUri, message: 'Nie udało się odczytać zdjęcia. Zrób je ponownie.', canRetry: false })
     return
   }
   lastCapture = { photoUri, base64 }
@@ -663,7 +663,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
-      message: outcome.error ? failureMessage(outcome.error, r) : 'The receipt could not be read.',
+      message: outcome.error ? failureMessage(outcome.error, r) : 'Nie udało się odczytać paragonu.',
       canRetry: outcome.error?.retryable ?? false,
       failureKind: outcome.error?.kind,
       ...(outcome.error?.action ? { action: outcome.error.action } : {}),
@@ -676,7 +676,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
-      message: 'No food lines found on that receipt. Get the itemized part flat and in focus.',
+      message: 'Na tym paragonie nie znaleziono pozycji z jedzeniem. Ułóż część z pozycjami płasko i ostro.',
       canRetry: true,
     })
     return
@@ -744,7 +744,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
-      message: `Read the receipt but could not find nutrition for: ${unresolved.join(', ')}. Add them by search instead.`,
+      message: `Paragon odczytano, ale nie znaleziono wartości odżywczych dla: ${unresolved.join(', ')}. Dodaj je przez wyszukiwanie.`,
       canRetry: false,
     })
     return

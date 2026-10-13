@@ -224,3 +224,22 @@ describe('base URL override', () => {
     expect(t.tools).toEqual([{ type: 'web_search' }])
   })
 })
+
+describe('Polish locale prompts', () => {
+  it('keeps canonical_food_key English and asks for Polish user-facing text', () => {
+    expect(SYSTEM_PROMPT).toMatch(/canonical_food_key\` stays ENGLISH/)
+    expect(SYSTEM_PROMPT).toMatch(/natural, brief Polish/)
+  })
+  it('label prompt asks for salt and kJ instead of sodium arithmetic', async () => {
+    const { LABEL_SCAN_INSTRUCTION } = await import('./label-scan.js')
+    expect(LABEL_SCAN_INSTRUCTION).toMatch(/salt_g/)
+    expect(LABEL_SCAN_INSTRUCTION).toMatch(/energy_kj/)
+    expect(LABEL_SCAN_INSTRUCTION).toMatch(/per-100 g/)
+  })
+  it('web lookup prompt prefers Polish sources and salt', async () => {
+    const { buildWebLookupInstruction } = await import('./web-lookup.js')
+    const text = buildWebLookupInstruction({ itemName: 'Jogurt naturalny', brand: 'Piątnica' })
+    expect(text).toMatch(/Polish sources first/)
+    expect(text).toMatch(/salt_g/)
+  })
+})

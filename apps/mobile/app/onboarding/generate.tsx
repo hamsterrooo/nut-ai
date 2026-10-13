@@ -22,11 +22,11 @@ export default function GenerateScreen() {
 
         <View style={styles.doneRow}>
           <Icon name="check" size={18} color={theme.affirm} weight={2.4} />
-          <Text style={[type.bodyStrong, { color: theme.text }]}>All done!</Text>
+          <Text style={[type.bodyStrong, { color: theme.text }]}>Gotowe!</Text>
         </View>
 
         <Text style={[styles.heading, { color: theme.text }]}>
-          Time to generate your custom plan!
+          Czas wygenerować Twój spersonalizowany plan!
         </Text>
       </View>
     </OnboardingScreen>

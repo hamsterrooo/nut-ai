@@ -10,17 +10,18 @@ import type { ProviderId, ProviderRequest } from './providers.js'
  * facts rather than to what a model thinks a "LG FRY" weighs.
  */
 
-export const RECEIPT_SCAN_PROMPT_VERSION = 'receipt-scan-v1'
+export const RECEIPT_SCAN_PROMPT_VERSION = 'receipt-scan-v2-pl'
 
 export const RECEIPT_SCAN_INSTRUCTION = [
-  'The photo shows a purchase receipt. TRANSCRIBE the food and drink line items — copy what is printed, expanding obvious receipt abbreviations ("MCCHICKEN" -> "McChicken", "LG FRY" -> "Large Fries") but never guessing beyond the print.',
+  'The photo shows a purchase receipt from Poland (paragon fiskalny, in Polish; a restaurant rachunek or a store receipt). TRANSCRIBE the food and drink line items — copy what is printed, expanding obvious receipt abbreviations ("MLEKO UHT 3,2% 1L" stays as is, "JOG.NAT.PIATN." -> "Jogurt naturalny Piątnica", "CHLEB WIEJSKI KROJ." -> "Chleb wiejski krojony") but never guessing beyond the print.',
   '',
   'Rules:',
-  '- merchant: the restaurant or store name from the receipt header, or null.',
-  '- items: FOOD AND DRINK ONLY. Skip tax, totals, discounts, delivery fees, utensils, bags and non-food merchandise.',
-  '- quantity from the printed qty column; 1 when none is printed.',
+  '- merchant: the restaurant or store name from the receipt header (e.g. "Biedronka", "Żabka", "McDonald\'s", "Pizzeria ..."), or null.',
+  '- items: FOOD AND DRINK ONLY. Skip PTU/VAT lines (the letters A, B, C, D after a price are tax rates, not products), totals ("SUMA PLN", "RAZEM"), rabaty (discounts), kaucja (deposits), torba/reklamówka (bags), delivery and non-food merchandise.',
+  '- Keep each item name in Polish exactly as printed or lightly expanded; do not translate it.',
+  '- quantity from the printed qty column ("2 x 3,99" means quantity 2, "0,456 kg" for loose produce means quantity 1); 1 when none is printed.',
   '- Combine identical lines by summing quantity.',
-  '- A combo/meal line expands to its standard parts when the receipt itself does not itemize them: "Big Mac Meal" -> Big Mac, Medium Fries, Medium Drink.',
+  '- A combo or set line expands to its standard parts only when the receipt itself does not itemize them ("Zestaw Big Mac" -> Big Mac, Frytki średnie, Napój średni).',
   '- If the photo is not a legible receipt, return {"merchant": null, "items": []}.',
   '',
   'Respond with ONLY this JSON object:',

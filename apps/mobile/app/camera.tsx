@@ -12,10 +12,10 @@ import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 type CameraMode = 'food' | 'barcode' | 'label' | 'receipt'
 
 const MODES: Array<{ id: CameraMode; label: string; icon: IconName }> = [
-  { id: 'food', label: 'Scan food', icon: 'scan' },
-  { id: 'barcode', label: 'Barcode', icon: 'barcode' },
-  { id: 'label', label: 'Label', icon: 'nutritionLabel' },
-  { id: 'receipt', label: 'Receipt', icon: 'receipt' },
+  { id: 'food', label: 'Skanuj jedzenie', icon: 'scan' },
+  { id: 'barcode', label: 'Kod kreskowy', icon: 'barcode' },
+  { id: 'label', label: 'Etykieta', icon: 'nutritionLabel' },
+  { id: 'receipt', label: 'Paragon', icon: 'receipt' },
 ]
 
 /**
@@ -49,19 +49,19 @@ export default function Camera() {
     return (
       <View style={[styles.center, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
         <Text style={[type.heading, { color: theme.text, textAlign: 'center' }]}>
-          Nut AI needs your camera
+          Nut AI potrzebuje dostępu do aparatu
         </Text>
         <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center', marginTop: space.sm }]}>
-          Photos stay on your device unless you chose a cloud provider during setup.
+          Zdjęcia zostają na urządzeniu, chyba że podczas konfiguracji wybrano dostawcę w chmurze.
         </Text>
         <Pressable
           onPress={requestPermission}
           style={[styles.primary, { backgroundColor: theme.text, marginTop: space.xl }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg }]}>Allow camera</Text>
+          <Text style={[type.bodyStrong, { color: theme.bg }]}>Zezwól na aparat</Text>
         </Pressable>
         <Pressable onPress={() => router.back()} hitSlop={space.md} style={{ marginTop: space.lg }}>
-          <Text style={[type.body, { color: theme.textMuted }]}>Not now</Text>
+          <Text style={[type.body, { color: theme.textMuted }]}>Nie teraz</Text>
         </Pressable>
       </View>
     )
@@ -129,11 +129,11 @@ export default function Camera() {
         </View>
 
         {mode === 'barcode' ? (
-          <Text style={[type.caption, styles.hint]}>Point at the barcode — it scans on its own</Text>
+          <Text style={[type.caption, styles.hint]}>Skieruj na kod kreskowy, zeskanuje się sam</Text>
         ) : (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Take photo"
+            accessibilityLabel="Zrób zdjęcie"
             onPress={capture}
             disabled={busy}
             style={[styles.shutter, busy && { opacity: 0.5 }]}
@@ -143,7 +143,7 @@ export default function Camera() {
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Close"
+        accessibilityLabel="Zamknij"
         onPress={() => router.back()}
         hitSlop={space.md}
         style={[styles.close, { top: insets.top + space.md }]}

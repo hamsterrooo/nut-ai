@@ -107,22 +107,22 @@ function classify(status: number, body: string): ScanFailure {
   const gateway = classifyGatewayError(status, body)
   if (gateway) return gateway
   if (status === 401 || status === 403) {
-    return { kind: 'key-invalid', message: 'That key was rejected by the provider.', retryable: false, httpStatus: status }
+    return { kind: 'key-invalid', message: 'Dostawca odrzucił ten klucz.', retryable: false, httpStatus: status }
   }
   if (status === 402) {
-    return { kind: 'quota-exhausted', message: 'Your provider account is out of credit.', retryable: false, httpStatus: status }
+    return { kind: 'quota-exhausted', message: 'Na koncie u dostawcy skończył się kredyt.', retryable: false, httpStatus: status }
   }
   if (status === 404) {
-    return { kind: 'model-unavailable', message: 'That model is not available on your account.', retryable: false, httpStatus: status }
+    return { kind: 'model-unavailable', message: 'Ten model nie jest dostępny na Twoim koncie.', retryable: false, httpStatus: status }
   }
   if (status === 429) {
-    return { kind: 'error-retryable', message: 'The provider is rate-limiting. Try again shortly.', retryable: true, httpStatus: status }
+    return { kind: 'error-retryable', message: 'Dostawca ogranicza liczbę zapytań. Spróbuj za chwilę.', retryable: true, httpStatus: status }
   }
   if (status >= 500) {
-    return { kind: 'error-retryable', message: 'The provider had a server error.', retryable: true, httpStatus: status }
+    return { kind: 'error-retryable', message: 'Dostawca zgłosił błąd serwera.', retryable: true, httpStatus: status }
   }
   if (/refus|safety|policy/i.test(body)) {
-    return { kind: 'content-refusal', message: 'The provider declined to analyze this image.', retryable: false, httpStatus: status }
+    return { kind: 'content-refusal', message: 'Dostawca odmówił analizy tego zdjęcia.', retryable: false, httpStatus: status }
   }
   return { kind: 'error-retryable', message: `Unexpected response (${status}).`, retryable: true, httpStatus: status }
 }
@@ -201,12 +201,12 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
     try {
       json = JSON.parse(text)
     } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'The provider returned malformed JSON.', retryable: false } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca zwrócił uszkodzony JSON.', retryable: false } }
     }
 
     const extracted = extractPayload(req.provider, json)
     if (!extracted || extracted.raw == null) {
-      return { ok: false, error: { kind: 'schema-violation', message: 'The provider returned an unexpected shape.', retryable: false } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca zwrócił nieoczekiwany format odpowiedzi.', retryable: false } }
     }
 
     const m = metered(res)
@@ -236,12 +236,12 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
         ok: false,
         error: {
           kind: 'timeout-ambiguous',
-          message: 'The request timed out. It may still have been charged, so we will not retry automatically.',
+          message: 'Upłynął limit czasu żądania. Mogło zostać naliczone, więc nie ponowimy go automatycznie.',
           retryable: false,
         },
       }
     }
-    return { ok: false, error: { kind: 'offline', message: 'No connection to the provider.', retryable: true } }
+    return { ok: false, error: { kind: 'offline', message: 'Brak połączenia z dostawcą.', retryable: true } }
   } finally {
     clearTimeout(timer)
   }
@@ -341,7 +341,7 @@ async function postVisionJson(
     try {
       j = JSON.parse(text) as Record<string, any>
     } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'The provider returned malformed JSON.', retryable: false } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca zwrócił uszkodzony JSON.', retryable: false } }
     }
 
     let out: string | null = null
@@ -354,25 +354,25 @@ async function postVisionJson(
       out = (j.candidates?.[0]?.content?.parts ?? []).map((p: any) => p?.text ?? '').join('') || null
     }
     if (!out) {
-      return { ok: false, error: { kind: 'schema-violation', message: 'The provider returned no text.', retryable: false } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca nie zwrócił tekstu.', retryable: false } }
     }
 
     const fenced = out.replace(/```(?:json)?/g, '').trim()
     const start = fenced.indexOf('{')
     const end = fenced.lastIndexOf('}')
     if (start < 0 || end <= start) {
-      return { ok: false, error: { kind: 'schema-violation', message: 'No JSON in the response.', retryable: false } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'Brak JSON w odpowiedzi.', retryable: false } }
     }
     try {
       return { ok: true, raw: JSON.parse(fenced.slice(start, end + 1)), ...m }
     } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'The response JSON did not parse.', retryable: false } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'Nie udało się sparsować JSON z odpowiedzi.', retryable: false } }
     }
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') {
-      return { ok: false, error: { kind: 'timeout-ambiguous', message: 'The scan timed out.', retryable: false } }
+      return { ok: false, error: { kind: 'timeout-ambiguous', message: 'Skan przekroczył limit czasu.', retryable: false } }
     }
-    return { ok: false, error: { kind: 'offline', message: 'No connection to the provider.', retryable: true } }
+    return { ok: false, error: { kind: 'offline', message: 'Brak połączenia z dostawcą.', retryable: true } }
   } finally {
     clearTimeout(timer)
   }
@@ -429,7 +429,7 @@ export async function runWebLookup(
     try {
       j = JSON.parse(text) as Record<string, any>
     } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'The provider returned malformed JSON.', retryable: false } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca zwrócił uszkodzony JSON.', retryable: false } }
     }
     let out: string | null = null
     if (provider === 'anthropic') {
@@ -446,25 +446,25 @@ export async function runWebLookup(
       out = (j.candidates?.[0]?.content?.parts ?? []).map((p: any) => p?.text ?? '').join('') || null
     }
     if (!out) {
-      return { ok: false, error: { kind: 'schema-violation', message: 'The provider returned no text.', retryable: false } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca nie zwrócił tekstu.', retryable: false } }
     }
 
     const fenced = out.replace(/```(?:json)?/g, '').trim()
     const start = fenced.indexOf('{')
     const end = fenced.lastIndexOf('}')
     if (start < 0 || end <= start) {
-      return { ok: false, error: { kind: 'schema-violation', message: 'No JSON in the response.', retryable: false } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'Brak JSON w odpowiedzi.', retryable: false } }
     }
     try {
       return { ok: true, raw: JSON.parse(fenced.slice(start, end + 1)), ...m }
     } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'The response JSON did not parse.', retryable: false } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'Nie udało się sparsować JSON z odpowiedzi.', retryable: false } }
     }
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') {
-      return { ok: false, error: { kind: 'timeout-ambiguous', message: 'The lookup timed out.', retryable: false } }
+      return { ok: false, error: { kind: 'timeout-ambiguous', message: 'Wyszukiwanie przekroczyło limit czasu.', retryable: false } }
     }
-    return { ok: false, error: { kind: 'offline', message: 'No connection to the provider.', retryable: true } }
+    return { ok: false, error: { kind: 'offline', message: 'Brak połączenia z dostawcą.', retryable: true } }
   } finally {
     clearTimeout(timer)
   }

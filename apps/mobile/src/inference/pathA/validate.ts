@@ -55,23 +55,23 @@ const ANTHROPIC_VERSION = '2023-06-01'
 
 function classify(status: number, body: string): ScanFailure {
   if (status === 401 || status === 403) {
-    return { kind: 'key-invalid', message: 'The provider rejected this credential.', retryable: false, httpStatus: status }
+    return { kind: 'key-invalid', message: 'Dostawca odrzucił to poświadczenie.', retryable: false, httpStatus: status }
   }
   if (status === 402) {
-    return { kind: 'quota-exhausted', message: 'The account has no credit.', retryable: false, httpStatus: status }
+    return { kind: 'quota-exhausted', message: 'Na koncie nie ma kredytu.', retryable: false, httpStatus: status }
   }
   if (status === 404) {
-    return { kind: 'model-unavailable', message: 'That model is not available on this account.', retryable: false, httpStatus: status }
+    return { kind: 'model-unavailable', message: 'Ten model nie jest dostępny na tym koncie.', retryable: false, httpStatus: status }
   }
   if (status === 429) {
-    return { kind: 'error-retryable', message: 'Rate limited. Try again shortly.', retryable: true, httpStatus: status }
+    return { kind: 'error-retryable', message: 'Przekroczono limit zapytań. Spróbuj za chwilę.', retryable: true, httpStatus: status }
   }
   if (status >= 500) {
-    return { kind: 'error-retryable', message: 'The provider had a server error.', retryable: true, httpStatus: status }
+    return { kind: 'error-retryable', message: 'Dostawca zgłosił błąd serwera.', retryable: true, httpStatus: status }
   }
   return {
     kind: 'error-retryable',
-    message: `Unexpected ${status} from the provider.`,
+    message: `Nieoczekiwana odpowiedź ${status} od dostawcy.`,
     retryable: true,
     httpStatus: status,
   }
@@ -149,15 +149,15 @@ export async function validateCredential(
       if ('offline' in r) {
         return {
           ok: false,
-          error: { kind: 'offline', message: 'No connection to Anthropic.', retryable: true },
-          detail: 'Network request failed before reaching the provider.',
+          error: { kind: 'offline', message: 'Brak połączenia z Anthropic.', retryable: true },
+          detail: 'Żądanie sieciowe nie dotarło do dostawcy.',
         }
       }
       if ('aborted' in r) {
         return {
           ok: false,
-          error: { kind: 'timeout-ambiguous', message: 'The check timed out.', retryable: false },
-          detail: `No response within ${timeoutMs / 1000}s.`,
+          error: { kind: 'timeout-ambiguous', message: 'Sprawdzanie przekroczyło limit czasu.', retryable: false },
+          detail: `Brak odpowiedzi w ciągu ${timeoutMs / 1000} s.`,
         }
       }
       if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: shape, modelId: model }
@@ -182,15 +182,15 @@ export async function validateCredential(
     if ('offline' in r) {
       return {
         ok: false,
-        error: { kind: 'offline', message: 'No connection to OpenAI.', retryable: true },
-        detail: 'Network request failed before reaching the provider.',
+        error: { kind: 'offline', message: 'Brak połączenia z OpenAI.', retryable: true },
+        detail: 'Żądanie sieciowe nie dotarło do dostawcy.',
       }
     }
     if ('aborted' in r) {
       return {
         ok: false,
-        error: { kind: 'timeout-ambiguous', message: 'The check timed out.', retryable: false },
-        detail: `No response within ${timeoutMs / 1000}s.`,
+        error: { kind: 'timeout-ambiguous', message: 'Sprawdzanie przekroczyło limit czasu.', retryable: false },
+        detail: `Brak odpowiedzi w ciągu ${timeoutMs / 1000} s.`,
       }
     }
     if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: 'bearer', modelId: model }
@@ -207,15 +207,15 @@ export async function validateCredential(
   if ('offline' in r) {
     return {
       ok: false,
-      error: { kind: 'offline', message: 'No connection to Google.', retryable: true },
-      detail: 'Network request failed before reaching the provider.',
+      error: { kind: 'offline', message: 'Brak połączenia z Google.', retryable: true },
+      detail: 'Żądanie sieciowe nie dotarło do dostawcy.',
     }
   }
   if ('aborted' in r) {
     return {
       ok: false,
-      error: { kind: 'timeout-ambiguous', message: 'The check timed out.', retryable: false },
-      detail: `No response within ${timeoutMs / 1000}s.`,
+      error: { kind: 'timeout-ambiguous', message: 'Sprawdzanie przekroczyło limit czasu.', retryable: false },
+      detail: `Brak odpowiedzi w ciągu ${timeoutMs / 1000} s.`,
     }
   }
   if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: 'query-param', modelId: model }

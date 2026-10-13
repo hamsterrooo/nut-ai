@@ -46,7 +46,7 @@ export default function EditGoals() {
   }, [])
 
   const n = (s: string) => {
-    const v = Number.parseFloat(s)
+    const v = Number.parseFloat(s.replace(',', '.'))
     return Number.isFinite(v) && v >= 0 ? v : 0
   }
 
@@ -74,42 +74,42 @@ export default function EditGoals() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg, paddingTop: insets.top + space.lg }}>
       <View style={styles.head}>
-        <Text style={[type.title, { color: theme.text }]}>Nutrition goals</Text>
+        <Text style={[type.title, { color: theme.text }]}>Cele żywieniowe</Text>
         <Pressable onPress={() => router.back()} hitSlop={space.md}>
-          <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
+          <Text style={[type.body, { color: theme.textMuted }]}>Anuluj</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 140 }}>
-        <Field label="Calories" unit="kcal" value={kcal} onChange={setKcal} />
-        <Field label="Protein" unit="g" value={protein} onChange={setProtein} />
-        <Field label="Fat" unit="g" value={fat} onChange={setFat} />
+        <Field label="Kalorie" unit="kcal" value={kcal} onChange={setKcal} />
+        <Field label="Białko" unit="g" value={protein} onChange={setProtein} />
+        <Field label="Tłuszcze" unit="g" value={fat} onChange={setFat} />
 
         <View style={[styles.derived, { backgroundColor: theme.bgSunken }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <Text style={[type.body, { color: theme.textMuted }]}>Carbs</Text>
+            <Text style={[type.body, { color: theme.textMuted }]}>Węglowodany</Text>
             <Text style={[styles.big, { color: theme.text }]}>{Math.round(carbsV)} g</Text>
           </View>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 18 }]}>
-            Carbs are always the remainder, so your four numbers can never disagree with each other.
-            Change calories, protein or fat and this re-solves.
+            Węglowodany to zawsze reszta, więc Twoje cztery liczby nigdy nie będą ze sobą sprzeczne.
+            Zmień kalorie, białko lub tłuszcz, a to przeliczy się na nowo.
           </Text>
         </View>
 
         {impossible ? (
           <View style={[styles.warn, { backgroundColor: theme.safetyBg }]}>
             <Text style={[type.caption, { color: theme.safety }]}>
-              Protein and fat alone already exceed {Math.round(kcalV)} kcal
-              ({Math.round(reconcileFromMacros(proteinV, 0, fatV))} kcal). Raise calories or lower one
-              of them.
+              Samo białko i tłuszcz przekraczają już {Math.round(kcalV)} kcal
+              ({Math.round(reconcileFromMacros(proteinV, 0, fatV))} kcal). Zwiększ kalorie albo
+              zmniejsz któryś z tych składników.
             </Text>
           </View>
         ) : null}
 
         <View style={[styles.note, { backgroundColor: theme.uncertainBg }]}>
           <Text style={[type.caption, { color: theme.text, lineHeight: 18 }]}>
-            Saving switches OFF the adaptive target. We will not quietly overwrite a number you
-            chose on purpose — you can turn adaptation back on by regenerating your plan.
+            Zapis wyłącza cel adaptacyjny. Nie nadpiszemy po cichu liczby wybranej celowo. Adaptację
+            włączysz ponownie, generując plan od nowa.
           </Text>
         </View>
       </ScrollView>
@@ -120,7 +120,7 @@ export default function EditGoals() {
           disabled={kcalV <= 0 || impossible || saving}
           style={[styles.cta, { backgroundColor: kcalV > 0 && !impossible ? theme.text : theme.border }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Save</Text>
+          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Zapisz</Text>
         </Pressable>
       </View>
     </View>
@@ -144,7 +144,7 @@ function Field({
           keyboardType="number-pad"
           value={value}
           onChangeText={onChange}
-          accessibilityLabel={`${label} in ${unit}`}
+          accessibilityLabel={`${label} (${unit})`}
           style={[styles.input, { color: theme.text }]}
         />
         <Text style={[type.body, { color: theme.textMuted }]}>{unit}</Text>

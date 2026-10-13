@@ -5,14 +5,14 @@ export default function AccomplishScreen() {
     <OptionScreen
       step="accomplish"
       field="accomplish"
-      title="What would you like to accomplish?"
+      title="Co chcesz osiągnąć?"
       // Consumer: todayEmphasisFor(). Decides what the Today screen leads with.
-      subtitle="This decides what your Today screen puts first."
+      subtitle="To decyduje, co ekran Dziś pokazuje na początku."
       options={[
-        { value: 'healthier', label: 'Eat and live healthier', glyph: 'apple' },
-        { value: 'energy', label: 'Boost my energy and mood', glyph: 'sun' },
-        { value: 'motivated', label: 'Stay motivated and consistent', glyph: 'muscle' },
-        { value: 'body_image', label: 'Feel better about my body', glyph: 'lotus' },
+        { value: 'healthier', label: 'Jeść i żyć zdrowiej', glyph: 'apple' },
+        { value: 'energy', label: 'Mieć więcej energii i lepszy nastrój', glyph: 'sun' },
+        { value: 'motivated', label: 'Utrzymać motywację i systematyczność', glyph: 'muscle' },
+        { value: 'body_image', label: 'Lepiej czuć się ze swoim ciałem', glyph: 'lotus' },
       ]}
       scroll
     />

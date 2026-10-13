@@ -1,3 +1,4 @@
+import { formatDecimal } from '../src/i18n/format'
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -37,10 +38,10 @@ type Chip = ProviderId | 'publik'
 /** The two-entry publik model list; publik-smart only once the phone is linked. */
 function publikModelList(claimState: 'anonymous' | 'claimed'): Array<{ id: string; label: string; note: string }> {
   const list: Array<{ id: string; label: string; note: string }> = [
-    { id: PUBLIK_MODELS.balanced, label: 'publik-balanced', note: 'Default for photos — the mid tier; identification detail is what a dearer model buys, and portion error does not shrink with it' },
-    { id: PUBLIK_MODELS.fast, label: 'publik-fast', note: 'Cheapest tier; try it for scans once you are happy with the default' },
+    { id: PUBLIK_MODELS.balanced, label: 'publik-balanced', note: 'Domyślny dla zdjęć, średni poziom. Droższy model kupuje lepsze rozpoznawanie szczegółów, a błąd porcji się nie zmniejsza' },
+    { id: PUBLIK_MODELS.fast, label: 'publik-fast', note: 'Najtańszy poziom. Wypróbuj go, gdy domyślny już Cię zadowala' },
   ]
-  if (claimState === 'claimed') list.push({ id: PUBLIK_MODELS.smart, label: 'publik-smart', note: 'Top tier; costs the most per scan' })
+  if (claimState === 'claimed') list.push({ id: PUBLIK_MODELS.smart, label: 'publik-smart', note: 'Najwyższy poziom, kosztuje najwięcej za skan' })
   return list
 }
 
@@ -114,12 +115,12 @@ export default function ProviderSettings() {
 
   function disconnect() {
     Alert.alert(
-      'Disconnect publik API?',
-      "This phone's publik key is revoked and forgotten. Photo scans stop working until you reconnect or add your own key. Your logged data is not touched.",
+      'Rozłączyć publik API?',
+      'Klucz publik tego telefonu zostanie unieważniony i zapomniany. Skanowanie zdjęć przestanie działać, dopóki nie połączysz się ponownie lub nie dodasz własnego klucza. Zapisane dane nie zostaną ruszone.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Anuluj', style: 'cancel' },
         {
-          text: 'Disconnect',
+          text: 'Rozłącz',
           style: 'destructive',
           onPress: () => {
             void (async () => {
@@ -146,7 +147,7 @@ export default function ProviderSettings() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <View style={[styles.head, { paddingTop: insets.top + space.sm }]}>
-        <Text style={[type.title, { color: theme.text }]}>AI provider</Text>
+        <Text style={[type.title, { color: theme.text }]}>Dostawca AI</Text>
         <Pressable onPress={() => router.back()} hitSlop={space.md}>
           <Icon name="close" size={22} color={theme.textMuted} />
         </Pressable>
@@ -210,8 +211,8 @@ export default function ProviderSettings() {
                   wallet={publikWallet}
                   starterMicros={null}
                   secondary={[
-                    { label: 'Use my own key instead', onPress: useOwnKey },
-                    { label: 'Disconnect publik API', onPress: disconnect, destructive: true },
+                    { label: 'Użyj własnego klucza', onPress: useOwnKey },
+                    { label: 'Rozłącz publik API', onPress: disconnect, destructive: true },
                   ]}
                 />
               </View>
@@ -239,7 +240,7 @@ export default function ProviderSettings() {
                 })}
               </View>
               <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, lineHeight: 18 }]}>
-                Every scan is priced per use at 50% of the model's published list price. You can see each charge on your publik dashboard.
+                Każdy skan jest wyceniany za użycie na 50% ceny katalogowej modelu. Każde obciążenie zobaczysz w panelu publik.
               </Text>
             </>
           ) : (
@@ -251,7 +252,7 @@ export default function ProviderSettings() {
                 onPress={connect}
                 style={[styles.primary, { backgroundColor: theme.text }, publikBusy && { opacity: 0.4 }]}
               >
-                <Text style={[type.bodyStrong, { color: theme.bg }]}>{publikBusy ? 'Connecting…' : 'Connect publik API'}</Text>
+                <Text style={[type.bodyStrong, { color: theme.bg }]}>{publikBusy ? 'Łączenie…' : 'Połącz publik API'}</Text>
               </Pressable>
             </View>
           )
@@ -261,22 +262,22 @@ export default function ProviderSettings() {
           <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
               <Icon name="check" size={16} color={theme.affirm} weight={2.4} />
-              <Text style={[type.bodyStrong, { color: theme.text }]}>Key saved</Text>
+              <Text style={[type.bodyStrong, { color: theme.text }]}>Klucz zapisany</Text>
               <Text style={[type.body, { color: theme.textMuted }]}>{masked}</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: space.lg, marginTop: space.md }}>
               <Pressable onPress={() => setShowForm(true)} hitSlop={space.sm}>
-                <Text style={[type.label, { color: theme.protein }]}>Replace key</Text>
+                <Text style={[type.label, { color: theme.protein }]}>Zmień klucz</Text>
               </Pressable>
               <Pressable
                 onPress={() =>
                   Alert.alert(
-                    'Remove this key?',
-                    `Photo scans stop working until you add a ${PROVIDER_NAME[provider]} key again${publik ? ' or turn on publik API' : ''}. Your logged data is not touched.`,
+                    'Usunąć ten klucz?',
+                    `Skanowanie zdjęć przestanie działać, dopóki ponownie nie dodasz klucza ${PROVIDER_NAME[provider]}${publik ? ' lub nie włączysz publik API' : ''}. Zapisane dane nie zostaną ruszone.`,
                     [
-                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Anuluj', style: 'cancel' },
                       {
-                        text: 'Remove',
+                        text: 'Usuń',
                         style: 'destructive',
                         onPress: () => {
                           void (async () => {
@@ -291,7 +292,7 @@ export default function ProviderSettings() {
                 }
                 hitSlop={space.sm}
               >
-                <Text style={[type.label, { color: theme.safety }]}>Remove key</Text>
+                <Text style={[type.label, { color: theme.safety }]}>Usuń klucz</Text>
               </Pressable>
             </View>
           </View>
@@ -327,7 +328,7 @@ export default function ProviderSettings() {
                     <View style={{ flex: 1 }}>
                       <Text style={[type.bodyStrong, { color: theme.text }]}>{m.label}</Text>
                       <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-                        ~${m.approxScanCostUsd.toFixed(4)} per scan
+                        ~{formatDecimal(m.approxScanCostUsd, 4)} $ za skan
                       </Text>
                     </View>
                     {active ? <Icon name="check" size={18} color={theme.text} weight={2.4} /> : null}
@@ -336,8 +337,8 @@ export default function ProviderSettings() {
               })}
             </View>
             <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, lineHeight: 18 }]}>
-              The cheapest vision model is the honest default: frontier models are not measurably
-              better at portion size, which is where nearly all the error lives.
+              Najtańszy model wizyjny to uczciwa wartość domyślna: najlepsze modele nie są wyraźnie
+              lepsze w ocenie wielkości porcji, a w niej siedzi prawie cały błąd.
             </Text>
           </>
         ) : null}

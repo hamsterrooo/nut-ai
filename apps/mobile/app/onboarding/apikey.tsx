@@ -35,9 +35,9 @@ export default function ApiKeyScreen() {
         <OnboardingScreen
           step={stepIndex('apikey')}
           total={TOTAL_STEPS}
-          title="publik API is ready"
-          subtitle="Your balance starts at $0.00. Link this phone to your publik account for $0.05 of free use, once — or add your own key any time in Profile."
-          cta="Continue"
+          title="publik API jest gotowe"
+          subtitle="Saldo zaczyna się od 0,00 $. Połącz ten telefon z kontem publik, aby jednorazowo dostać 0,05 $ darmowego użycia, albo w każdej chwili dodaj własny klucz w Profilu."
+          cta="Dalej"
           onCta={() => router.push(nextRoute('apikey') as never)}
           scroll
         >
@@ -49,9 +49,9 @@ export default function ApiKeyScreen() {
       <OnboardingScreen
         step={stepIndex('apikey')}
         total={TOTAL_STEPS}
-        title="Nut AI uses publik API"
-        subtitle="Photo scans need an AI model. By default they run on publik API, with no key to paste. Your balance starts at $0.00; linking your publik account gives $0.05 of free use, once."
-        cta={busy ? 'Connecting…' : 'Continue with publik API'}
+        title="Nut AI korzysta z publik API"
+        subtitle="Skany zdjęć wymagają modelu AI. Domyślnie działają na publik API, bez wklejania klucza. Saldo zaczyna się od 0,00 $, a połączenie konta publik daje jednorazowo 0,05 $ darmowego użycia."
+        cta={busy ? 'Łączenie…' : 'Dalej z publik API'}
         ctaDisabled={busy}
         onCta={() => {
           if (busy) return
@@ -73,7 +73,7 @@ export default function ApiKeyScreen() {
             setMinted(r)
           })()
         }}
-        secondaryLabel={busy ? undefined : 'Use my own key instead'}
+        secondaryLabel={busy ? undefined : 'Użyj własnego klucza'}
         onSecondary={() => {
           setAnswer('provider', undefined)
           router.back()
@@ -91,12 +91,12 @@ export default function ApiKeyScreen() {
     <OnboardingScreen
       step={stepIndex('apikey')}
       total={TOTAL_STEPS}
-      title={`Connect ${PROVIDER_NAME[provider]}`}
-      subtitle={`We'll check the key works before saving it. It is stored in the iOS Keychain and sent only to ${PROVIDER_NAME[provider]}.`}
-      cta="Continue"
+      title={`Połącz ${PROVIDER_NAME[provider]}`}
+      subtitle={`Sprawdzimy, czy klucz działa, zanim go zapiszemy. Jest przechowywany w pęku kluczy iOS i wysyłany wyłącznie do ${PROVIDER_NAME[provider]}.`}
+      cta="Dalej"
       onCta={() => router.push(nextRoute('apikey') as never)}
       ctaDisabled={!saved}
-      secondaryLabel={saved ? undefined : 'Skip for now'}
+      secondaryLabel={saved ? undefined : 'Pomiń na razie'}
       onSecondary={() => {
         setAnswer('provider', 'none')
         void putSetting('provider', 'none')

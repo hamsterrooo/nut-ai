@@ -21,9 +21,9 @@ import { MIN_TAP_TARGET, radius, space, type } from '../../src/theme/tokens'
  */
 
 const TABS: ReadonlyArray<{ name: string; label: string; icon: IconName }> = [
-  { name: 'index', label: 'Home', icon: 'home' },
-  { name: 'progress', label: 'Progress', icon: 'chart' },
-  { name: 'profile', label: 'Profile', icon: 'person' },
+  { name: 'index', label: 'Dziś', icon: 'home' },
+  { name: 'progress', label: 'Postępy', icon: 'chart' },
+  { name: 'profile', label: 'Profil', icon: 'person' },
 ]
 
 interface Action {
@@ -33,10 +33,10 @@ interface Action {
 }
 
 const ACTIONS: Action[] = [
-  { label: 'Log exercise', icon: 'dumbbell', route: '/log-exercise' },
-  { label: 'Saved foods', icon: 'bookmark', route: '/saved-foods' },
-  { label: 'Food Database', icon: 'search', route: '/food-search' },
-  { label: 'Scan food', icon: 'scan', route: '/camera' },
+  { label: 'Dodaj trening', icon: 'dumbbell', route: '/log-exercise' },
+  { label: 'Zapisane produkty', icon: 'bookmark', route: '/saved-foods' },
+  { label: 'Baza produktów', icon: 'search', route: '/food-search' },
+  { label: 'Skanuj jedzenie', icon: 'scan', route: '/camera' },
 ]
 
 export default function TabLayout() {
@@ -74,7 +74,7 @@ export default function TabLayout() {
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Add"
+              accessibilityLabel="Dodaj"
               onPress={() => setSheetOpen(true)}
               style={[styles.fab, { backgroundColor: theme.text }]}
             >
@@ -111,7 +111,7 @@ export default function TabLayout() {
             <View style={{ flex: 1 }} />
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Close"
+              accessibilityLabel="Zamknij"
               onPress={() => setSheetOpen(false)}
               style={[styles.fab, { backgroundColor: theme.text }]}
             >

@@ -23,24 +23,25 @@ export default function NotificationsScreen() {
     <OnboardingScreen
       step={stepIndex('notifications')}
       total={TOTAL_STEPS}
-      title="Stay on track with Nut AI"
+      title="Trzymaj kurs z Nut AI"
       onCta={() => router.push(nextRoute('notifications') as never)}
       scroll
     >
       <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
         <Icon name="clock" size={44} color={theme.text} weight={1.5} />
         <Text style={[type.bodyStrong, { color: theme.text, marginTop: space.md }]}>
-          A nudge when you'd usually log
+          Przypomnienie, gdy zwykle zapisujesz posiłki
         </Text>
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm }]}>
-          Reminders learn from when you actually log rather than firing at a fixed hour, and every
-          one is local to your device. Nothing is scheduled on a server, because there is no server.
+          Przypomnienia uczą się, kiedy faktycznie zapisujesz posiłki, zamiast odpalać się o stałej
+          godzinie, i każde jest lokalne na Twoim urządzeniu. Nic nie jest planowane na serwerze,
+          bo serwera nie ma.
         </Text>
       </View>
 
       <Text style={[type.caption, { color: theme.textMuted, marginTop: space.lg }]}>
-        We'll ask for notification permission the first time a reminder is actually worth sending,
-        not now. You can turn them on or off any time in Settings.
+        O zgodę na powiadomienia zapytamy dopiero wtedy, gdy przypomnienie faktycznie będzie warte
+        wysłania, a nie teraz. Włączysz je lub wyłączysz w każdej chwili w Ustawieniach.
       </Text>
     </OnboardingScreen>
   )

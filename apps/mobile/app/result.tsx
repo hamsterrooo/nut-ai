@@ -57,20 +57,20 @@ export default function Result() {
     const stage = phase.kind === 'analyzing' ? phase.stage : 'preparing'
     const copy =
       stage === 'preparing'
-        ? 'Preparing the photo…'
+        ? 'Przygotowanie zdjęcia…'
         : stage === 'identifying'
-          ? 'Identifying ingredients…'
-          : 'Matching the nutrition database…'
+          ? 'Rozpoznawanie składników…'
+          : 'Dopasowywanie do bazy żywieniowej…'
     return (
       <View style={[styles.center, { backgroundColor: theme.bg }]}>
         <Image source={{ uri: phase.photoUri }} style={styles.photo} />
         <ActivityIndicator color={theme.textMuted} style={{ marginTop: space.xl }} />
         <Text style={[type.heading, { color: theme.text, marginTop: space.md }]}>{copy}</Text>
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, textAlign: 'center' }]}>
-          Your photo is saved — nothing is lost if this fails.
+          Zdjęcie jest zapisane. Nic nie przepadnie, jeśli się nie uda.
         </Text>
         <Pressable onPress={() => router.back()} hitSlop={space.md} style={{ marginTop: space.xl }}>
-          <Text style={[type.body, { color: theme.textMuted }]}>Close</Text>
+          <Text style={[type.body, { color: theme.textMuted }]}>Zamknij</Text>
         </Pressable>
       </View>
     )
@@ -81,7 +81,7 @@ export default function Result() {
       <View style={[styles.center, { backgroundColor: theme.bg }]}>
         <Image source={{ uri: phase.photoUri }} style={[styles.photo, { opacity: 0.5 }]} />
         <Text style={[type.heading, { color: theme.text, marginTop: space.xl, textAlign: 'center' }]}>
-          Could not read this meal
+          Nie udało się odczytać tego posiłku
         </Text>
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, textAlign: 'center', lineHeight: 19 }]}>
           {phase.message}
@@ -101,7 +101,7 @@ export default function Result() {
             onPress={() => void retryScan()}
             style={[styles.primary, { backgroundColor: theme.text, marginTop: space.xl, paddingHorizontal: space.xl }]}
           >
-            <Text style={[type.bodyStrong, { color: theme.bg }]}>Try again</Text>
+            <Text style={[type.bodyStrong, { color: theme.bg }]}>Spróbuj ponownie</Text>
           </Pressable>
         ) : null}
         <Pressable
@@ -109,7 +109,7 @@ export default function Result() {
           hitSlop={space.md}
           style={{ marginTop: space.lg }}
         >
-          <Text style={[type.body, { color: theme.textMuted }]}>Close</Text>
+          <Text style={[type.body, { color: theme.textMuted }]}>Zamknij</Text>
         </Pressable>
       </View>
     )
@@ -118,9 +118,9 @@ export default function Result() {
   if (phase.kind !== 'ready') {
     return (
       <View style={[styles.center, { backgroundColor: theme.bg }]}>
-        <Text style={[type.heading, { color: theme.text }]}>Nothing to show yet</Text>
+        <Text style={[type.heading, { color: theme.text }]}>Na razie nic do pokazania</Text>
         <Pressable onPress={() => router.back()} hitSlop={space.md} style={{ marginTop: space.xl }}>
-          <Text style={[type.body, { color: theme.textMuted }]}>Close</Text>
+          <Text style={[type.body, { color: theme.textMuted }]}>Zamknij</Text>
         </Pressable>
       </View>
     )
@@ -134,7 +134,7 @@ export default function Result() {
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 120 }}>
         <Text style={[type.title, { color: theme.text }]}>
-          {result.items[0]?.row.displayName ?? 'Your meal'}
+          {result.items[0]?.row.displayName ?? 'Twój posiłek'}
         </Text>
 
         {/* The point estimate leads. The band qualifies it — it never replaces it. */}
@@ -183,14 +183,14 @@ export default function Result() {
             {preAnswered.map((q) => (
               <Pressable key={q.question.id} onPress={() => answerQuestion(q, q.appliedDefault ?? '')} hitSlop={space.xs}>
                 <Text style={[type.caption, { color: theme.textMuted }]}>
-                  {q.disclosure} · <Text style={{ color: theme.uncertain }}>change</Text>
+                  {q.disclosure} · <Text style={{ color: theme.uncertain }}>zmień</Text>
                 </Text>
               </Pressable>
             ))}
           </View>
         )}
 
-        <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Ingredients</Text>
+        <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Składniki</Text>
 
         {result.meal.ingredients.map((row) => {
           const item = result.items.find((i) => i.row.id === row.id)
@@ -202,25 +202,25 @@ export default function Result() {
                   <Text style={[type.body, { color: theme.text }]}>{row.displayName}</Text>
                   {row.origin === 'web_lookup' && row.sourceUrl ? (
                     <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
-                      From {domainOf(row.sourceUrl)}
+                      Źródło: {domainOf(row.sourceUrl)}
                     </Text>
                   ) : row.isEstimate ? (
-                    <Text style={[type.micro, { color: theme.uncertain, marginTop: 2 }]}>AI ESTIMATE</Text>
+                    <Text style={[type.micro, { color: theme.uncertain, marginTop: 2 }]}>SZACUNEK AI</Text>
                   ) : null}
                   {item && <ConfidenceChip value={(row.nutrientSnapshot.kcal * row.grams) / 100} band={item.band} />}
                 </View>
 
                 <TextInput
-                  accessibilityLabel={`Grams of ${row.displayName}`}
+                  accessibilityLabel={`Masa w gramach: ${row.displayName}`}
                   keyboardType="numeric"
                   defaultValue={String(Math.round(row.grams))}
-                  onChangeText={(t) => editGrams(row.id, Number(t))}
+                  onChangeText={(t) => editGrams(row.id, Number(t.replace(',', '.')))}
                   style={[styles.gramInput, { color: theme.text, borderColor: theme.border }]}
                 />
 
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Remove ${row.displayName}`}
+                  accessibilityLabel={`Usuń ${row.displayName}`}
                   onPress={() => removeRow(row.id)}
                   hitSlop={space.md}
                   style={styles.remove}
@@ -243,7 +243,7 @@ export default function Result() {
             style={[styles.secondary, { borderColor: theme.border }]}
           >
             <Icon name="pencil" size={16} color={theme.text} />
-            <Text style={[type.bodyStrong, { color: theme.text }]}>Fix result</Text>
+            <Text style={[type.bodyStrong, { color: theme.text }]}>Popraw wynik</Text>
           </Pressable>
 
           <Pressable
@@ -264,7 +264,7 @@ export default function Result() {
             }}
             style={[styles.primary, { flex: 1, backgroundColor: theme.text }, logging && { opacity: 0.6 }]}
           >
-            <Text style={[type.bodyStrong, { color: theme.bg }]}>{logging ? 'Logging…' : 'Log it'}</Text>
+            <Text style={[type.bodyStrong, { color: theme.bg }]}>{logging ? 'Zapisywanie…' : 'Zapisz'}</Text>
           </Pressable>
         </View>
       </View>
@@ -273,12 +273,12 @@ export default function Result() {
         <View style={[styles.fixOverlay, { backgroundColor: theme.bg, paddingTop: insets.top + space.xl }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
             <Icon name="pencil" size={20} color={theme.text} />
-            <Text style={[type.title, { color: theme.text }]}>Fix result</Text>
+            <Text style={[type.title, { color: theme.text }]}>Popraw wynik</Text>
           </View>
           <TextInput
             autoFocus
             multiline
-            placeholder="Describe what needs to be fixed"
+            placeholder="Opisz, co trzeba poprawić"
             placeholderTextColor={theme.textFaint}
             value={fixText}
             onChangeText={setFixText}
@@ -286,8 +286,8 @@ export default function Result() {
           />
           <View style={[styles.fixExample, { backgroundColor: theme.bgSunken }]}>
             <Text style={[type.caption, { color: theme.textMuted, lineHeight: 19 }]}>
-              <Text style={{ fontWeight: '600' }}>Example:</Text> The wrap is missing the chicken and
-              avocado. Only what you mention gets changed — your other edits stay put.
+              <Text style={{ fontWeight: '600' }}>Przykład:</Text> W wrapie brakuje kurczaka i
+              awokado. Zmienia się tylko to, co wspomnisz, a Twoje inne poprawki zostają.
             </Text>
           </View>
           <View style={{ flex: 1 }} />
@@ -306,14 +306,14 @@ export default function Result() {
               !fixText.trim() && { opacity: 0.4 },
             ]}
           >
-            <Text style={[type.bodyStrong, { color: theme.bg }]}>Update</Text>
+            <Text style={[type.bodyStrong, { color: theme.bg }]}>Zaktualizuj</Text>
           </Pressable>
           <Pressable
             onPress={() => setFixOpen(false)}
             hitSlop={space.md}
             style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
           >
-            <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
+            <Text style={[type.body, { color: theme.textMuted }]}>Anuluj</Text>
           </Pressable>
         </View>
       ) : null}
@@ -344,7 +344,7 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
       <View style={[styles.lookupQuiet, { backgroundColor: theme.bgSunken }]}>
         <ActivityIndicator size="small" color={theme.textFaint} />
         <Text style={[type.caption, { color: theme.textMuted }]}>
-          Checking the web for published nutrition…
+          Szukanie opublikowanych wartości odżywczych w sieci…
         </Text>
       </View>
     )
@@ -359,11 +359,11 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
   return (
     <View style={[styles.qCard, { borderColor: theme.uncertain, backgroundColor: theme.uncertainBg, marginTop: space.sm }]}>
       <Text style={[type.bodyStrong, { color: theme.text }]}>
-        {result.question ?? 'Which one was it?'}
+        {result.question ?? 'Który to był?'}
       </Text>
       {result.source_url ? (
         <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
-          Menu data from {domainOf(result.source_url)}
+          Dane z: {domainOf(result.source_url)}
         </Text>
       ) : null}
 
@@ -388,7 +388,7 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
           <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
             <TextInput
               autoFocus
-              placeholder="Type what it was"
+              placeholder="Wpisz, co to było"
               placeholderTextColor={theme.textFaint}
               value={otherText}
               onChangeText={setOtherText}
@@ -411,7 +411,7 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
           </View>
         ) : (
           <Pressable onPress={() => setOtherOpen(true)} style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bg }]}>
-            <Text style={[type.body, { color: theme.textMuted }]}>Other…</Text>
+            <Text style={[type.body, { color: theme.textMuted }]}>Inne…</Text>
           </Pressable>
         )}
       </View>
@@ -469,16 +469,16 @@ function StatsPager({ totals, grams }: { totals: Parameters<typeof healthScore>[
         onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / pageW))}
       >
         <View style={[styles.statsPage, { width: pageW }]}>
-          <Macro label="Protein" value={totals.protein_g} color={theme.protein} icon="protein" />
-          <Macro label="Carbs" value={totals.carbs_g} color={theme.carbs} icon="carbs" />
-          <Macro label="Fat" value={totals.fat_g} color={theme.fat} icon="fat" />
+          <Macro label="Białko" value={totals.protein_g} color={theme.protein} icon="protein" />
+          <Macro label="Węglowodany" value={totals.carbs_g} color={theme.carbs} icon="carbs" />
+          <Macro label="Tłuszcz" value={totals.fat_g} color={theme.fat} icon="fat" />
         </View>
 
         <View style={{ width: pageW }}>
           <View style={styles.statsPage}>
-            <Macro label="Fiber" value={totals.fiber_g} color={theme.carbs} icon="fiber" />
-            <Macro label="Sugar" value={totals.sugar_g} color={theme.uncertain} icon="sugar" />
-            <Macro label="Sodium" value={totals.sodium_mg} unit="mg" color={theme.fat} icon="sodium" />
+            <Macro label="Błonnik" value={totals.fiber_g} color={theme.carbs} icon="fiber" />
+            <Macro label="Cukry" value={totals.sugar_g} color={theme.uncertain} icon="sugar" />
+            <Macro label="Sód" value={totals.sodium_mg} unit="mg" color={theme.fat} icon="sodium" />
           </View>
 
           {hs ? (
@@ -488,7 +488,7 @@ function StatsPager({ totals, grams }: { totals: Parameters<typeof healthScore>[
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
                 <Icon name="heart" size={18} color={theme.protein} />
-                <Text style={[type.bodyStrong, { color: theme.text, flex: 1 }]}>Health score</Text>
+                <Text style={[type.bodyStrong, { color: theme.text, flex: 1 }]}>Ocena zdrowotności</Text>
                 <Text style={[type.bodyStrong, { color: theme.text }]}>{hs.score}/10</Text>
               </View>
               <View style={[styles.healthTrack, { backgroundColor: theme.bgElevated }]}>
@@ -507,7 +507,7 @@ function StatsPager({ totals, grams }: { totals: Parameters<typeof healthScore>[
                 ))}
               {showWhy && (
                 <Text style={[type.micro, { color: theme.textFaint, marginTop: space.sm }]}>
-                  Computed by fixed rules from these totals — never by the AI.
+                  Obliczone stałymi regułami z tych sum, nigdy przez AI.
                 </Text>
               )}
             </Pressable>

@@ -14,7 +14,7 @@ import { radius, space, type } from '../../src/theme/tokens'
  *   server. Offering a sign-in link that cannot work would be the first thing a
  *   new user tapped and the first promise broken.
  *
- *   NO language pill. English is the only shipped locale; a picker with one
+ *   NO language pill. Polish is the only shipped locale; a picker with one
  *   option is a control that lies about what it does.
  */
 export default function Welcome() {
@@ -25,7 +25,7 @@ export default function Welcome() {
     <View style={[styles.root, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
       <View style={styles.hero}>
         <View style={[styles.phone, { backgroundColor: theme.bgSunken, borderColor: theme.border }]}>
-          <Text style={[type.micro, { color: theme.textMuted }]}>Today</Text>
+          <Text style={[type.micro, { color: theme.textMuted }]}>Dziś</Text>
           <View style={{ alignItems: 'center', marginTop: space.md }}>
             <Svg width={104} height={104}>
               <Circle cx={52} cy={52} r={44} stroke={theme.ringTrack} strokeWidth="9" fill="none" />
@@ -37,15 +37,15 @@ export default function Welcome() {
                 transform="rotate(-90 52 52)"
               />
             </Svg>
-            <Text style={[styles.heroNum, { color: theme.text }]}>2,340</Text>
-            <Text style={[type.caption, { color: theme.textMuted }]}>Calories left</Text>
+            <Text style={[styles.heroNum, { color: theme.text }]}>2 340</Text>
+            <Text style={[type.caption, { color: theme.textMuted }]}>Pozostało kalorii</Text>
           </View>
 
           <View style={styles.macroRow}>
             {[
-              { v: '161g', l: 'Protein', c: theme.protein },
-              { v: '204g', l: 'Carbs', c: theme.carbs },
-              { v: '61g', l: 'Fat', c: theme.fat },
+              { v: '161g', l: 'Białko', c: theme.protein },
+              { v: '204g', l: 'Węglowodany', c: theme.carbs },
+              { v: '61g', l: 'Tłuszcz', c: theme.fat },
             ].map((m) => (
               <View key={m.l} style={{ alignItems: 'center' }}>
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: m.c }} />
@@ -58,18 +58,18 @@ export default function Welcome() {
       </View>
 
       <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, space.xl) }]}>
-        <Text style={[styles.title, { color: theme.text }]}>Calorie tracking{'\n'}made easy</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Śledzenie kalorii{'\n'}bez wysiłku</Text>
 
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push('/onboarding/sex' as never)}
           style={[styles.cta, { backgroundColor: theme.text }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Get Started</Text>
+          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Zaczynamy</Text>
         </Pressable>
 
         <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center', marginTop: space.lg }]}>
-          No account. No subscription. Your food data never leaves this device.
+          Bez konta. Bez subskrypcji. Dane o Twoim jedzeniu nie opuszczają tego urządzenia.
         </Text>
 
         <Pressable
@@ -79,7 +79,7 @@ export default function Welcome() {
           style={{ marginTop: space.md, alignSelf: 'center' }}
         >
           <Text style={[type.label, { color: theme.textMuted, textDecorationLine: 'underline' }]}>
-            Restore from a backup
+            Przywróć z kopii zapasowej
           </Text>
         </Pressable>
       </View>

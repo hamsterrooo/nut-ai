@@ -6,16 +6,17 @@ import Svg, { Circle, Line as SvgLine, Path, Rect, Text as SvgText } from 'react
 import { bmi, computeTrend, trendSlopeLbPerWeek, type TrendPoint, type WeightPoint } from '@nutai/goals'
 import { currentGoal, db, setting, weightHistory, type CurrentGoal } from '../../src/data/repo'
 import { Icon } from '../../src/components/Icon'
+import { formatDecimal, formatInteger, pluralPl } from '../../src/i18n/format'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
 
 const LB_PER_KG = 2.20462
 
 const WINDOWS = [
-  { key: '90D', days: 90 },
-  { key: '6M', days: 182 },
-  { key: '1Y', days: 365 },
-  { key: 'ALL', days: Number.POSITIVE_INFINITY },
+  { key: '90D', label: '90 dni', days: 90 },
+  { key: '6M', label: '6 mies.', days: 182 },
+  { key: '1Y', label: '1 rok', days: 365 },
+  { key: 'ALL', label: 'Całość', days: Number.POSITIVE_INFINITY },
 ] as const
 
 const CHANGE_WINDOWS = [3, 7, 14, 30, 90] as const
@@ -84,31 +85,31 @@ export default function Progress() {
       contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 150 }}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[type.title, { color: theme.text }]}>Progress</Text>
+      <Text style={[type.title, { color: theme.text }]}>Postępy</Text>
 
       {/* Streak credits logging INTENT, so our own failures never break it. */}
       <View style={styles.row}>
         <View style={[styles.tile, { backgroundColor: theme.bgSunken }]}>
           <Icon name="flame" size={30} color={theme.text} />
           <Text style={[styles.tileNum, { color: theme.text }]}>{streak}</Text>
-          <Text style={[type.caption, { color: theme.textMuted }]}>Day streak</Text>
+          <Text style={[type.caption, { color: theme.textMuted }]}>Dni z rzędu</Text>
         </View>
         <View style={[styles.tile, { backgroundColor: theme.bgSunken }]}>
           <Icon name="scale" size={30} color={theme.text} />
           <Text style={[styles.tileNum, { color: theme.text }]}>{raw.length}</Text>
-          <Text style={[type.caption, { color: theme.textMuted }]}>Weigh-ins</Text>
+          <Text style={[type.caption, { color: theme.textMuted }]}>Ważenia</Text>
         </View>
       </View>
 
       <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
         <View style={styles.spread}>
-          <Text style={[type.caption, { color: theme.textMuted }]}>Current weight</Text>
+          <Text style={[type.caption, { color: theme.textMuted }]}>Aktualna waga</Text>
           <Pressable onPress={() => router.push('/log-weight' as never)} hitSlop={space.sm}>
-            <Text style={[type.label, { color: theme.protein }]}>Log weight</Text>
+            <Text style={[type.label, { color: theme.protein }]}>Zapisz wagę</Text>
           </Pressable>
         </View>
         <Text style={[styles.big, { color: theme.text }]}>
-          {currentKg != null ? `${(currentKg * LB_PER_KG).toFixed(1)} lbs` : '—'}
+          {currentKg != null ? `${formatDecimal(currentKg)} kg` : '—'}
         </Text>
 
         <View style={[styles.bar, { backgroundColor: theme.ringTrack }]}>
@@ -116,25 +117,25 @@ export default function Progress() {
         </View>
         <View style={styles.spread}>
           <Text style={[type.caption, { color: theme.textMuted }]}>
-            Start: {startKg != null ? `${(startKg * LB_PER_KG).toFixed(1)} lbs` : '—'}
+            Start: {startKg != null ? `${formatDecimal(startKg)} kg` : '—'}
           </Text>
           <Text style={[type.caption, { color: theme.textMuted }]}>
-            Goal: {goalKg != null ? `${(goalKg * LB_PER_KG).toFixed(1)} lbs` : '—'}
+            Cel: {goalKg != null ? `${formatDecimal(goalKg)} kg` : '—'}
           </Text>
         </View>
       </View>
 
       <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
         <View style={styles.spread}>
-          <Text style={[type.heading, { color: theme.text }]}>Weight progress</Text>
+          <Text style={[type.heading, { color: theme.text }]}>Postęp wagi</Text>
           <View style={[styles.badge, { backgroundColor: theme.bgElevated }]}>
-            <Text style={[type.caption, { color: theme.text }]}>{Math.round(pctOfGoal * 100)}% of goal</Text>
+            <Text style={[type.caption, { color: theme.text }]}>{Math.round(pctOfGoal * 100)}% celu</Text>
           </View>
         </View>
 
         {raw.length === 0 ? (
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md }]}>
-            No weigh-ins yet. It takes about five before a slope means anything.
+            Brak ważeń. Potrzeba około pięciu, zanim nachylenie trendu cokolwiek znaczy.
           </Text>
         ) : (
           <WeightChart trend={visible} />
@@ -148,7 +149,7 @@ export default function Progress() {
               style={[styles.segItem, window === w.key && { backgroundColor: theme.bg }]}
             >
               <Text style={[type.label, { color: window === w.key ? theme.text : theme.textMuted }]}>
-                {w.key}
+                {w.label}
               </Text>
             </Pressable>
           ))}
@@ -157,7 +158,7 @@ export default function Progress() {
         <View style={styles.legend}>
           <View style={styles.legendItem}>
             <View style={[styles.dot, { backgroundColor: theme.textFaint }]} />
-            <Text style={[type.caption, { color: theme.textMuted }]}>Each weigh-in</Text>
+            <Text style={[type.caption, { color: theme.textMuted }]}>Każde ważenie</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.line, { backgroundColor: theme.text }]} />
@@ -167,48 +168,48 @@ export default function Progress() {
       </View>
 
       <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
-        <Text style={[type.heading, { color: theme.text }]}>Weight changes</Text>
+        <Text style={[type.heading, { color: theme.text }]}>Zmiany wagi</Text>
         {CHANGE_WINDOWS.map((d) => (
-          <ChangeRow key={d} label={`${d} day`} lbs={changeOver(trend, d)} />
+          <ChangeRow key={d} label={`${d} dni`} kg={changeOver(trend, d)} />
         ))}
-        <ChangeRow label="All time" lbs={changeOver(trend, Number.POSITIVE_INFINITY)} />
+        <ChangeRow label="Całość" kg={changeOver(trend, Number.POSITIVE_INFINITY)} />
         <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, lineHeight: 18 }]}>
-          Measured on the trend line, not raw weigh-ins — a 3 lb overnight swing is water, and
-          reporting it as a change would be reporting noise as progress.
+          Liczone na linii trendu, a nie na pojedynczych ważeniach. Skok o 1,5 kg w ciągu nocy to
+          woda, a pokazywanie go jako zmiany byłoby pokazywaniem szumu jako postępu.
         </Text>
       </View>
 
       <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
-        <Text style={[type.heading, { color: theme.text }]}>Rate of change</Text>
+        <Text style={[type.heading, { color: theme.text }]}>Tempo zmiany</Text>
         <Text style={[styles.big, { color: theme.text }]}>
-          {slope == null ? '—' : `${slope > 0 ? '+' : ''}${slope.toFixed(2)} lb/wk`}
+          {slope == null ? '—' : `${slope > 0 ? '+' : ''}${formatDecimal(slope / LB_PER_KG, 2)} kg/tydz.`}
         </Text>
         <Text style={[type.caption, { color: theme.textMuted }]}>
-          {slope == null ? 'Not enough weigh-ins yet.' : `From ${raw.length} weigh-ins.`}
+          {slope == null ? 'Za mało ważeń.' : `Na podstawie ${raw.length} ${pluralPl(raw.length, 'ważenia', 'ważeń', 'ważeń')}.`}
         </Text>
       </View>
 
       {bodyBmi != null ? (
         <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
-          <Text style={[type.heading, { color: theme.text }]}>Your BMI</Text>
+          <Text style={[type.heading, { color: theme.text }]}>Twoje BMI</Text>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.md }}>
-            <Text style={[styles.big, { color: theme.text }]}>{bodyBmi.toFixed(1)}</Text>
+            <Text style={[styles.big, { color: theme.text }]}>{formatDecimal(bodyBmi)}</Text>
             <Text style={[type.caption, { color: theme.textMuted }]}>{bmiBand(bodyBmi)}</Text>
           </View>
           <BmiScale value={bodyBmi} />
           <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, lineHeight: 18 }]}>
-            BMI cannot tell muscle from fat and says nothing about an individual's health. It is
-            here because it is a common reference point, not because it is a verdict.
+            BMI nie odróżnia mięśni od tłuszczu i nic nie mówi o zdrowiu konkretnej osoby. Jest tu,
+            bo to powszechny punkt odniesienia, a nie wyrok.
           </Text>
         </View>
       ) : null}
 
       {goal ? (
         <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
-          <Text style={[type.heading, { color: theme.text }]}>Daily target</Text>
-          <Text style={[styles.big, { color: theme.text }]}>{Math.round(goal.targetKcal)} kcal</Text>
+          <Text style={[type.heading, { color: theme.text }]}>Dzienny cel</Text>
+          <Text style={[styles.big, { color: theme.text }]}>{formatInteger(goal.targetKcal)} kcal</Text>
           <Text style={[type.caption, { color: theme.textMuted }]}>
-            {goal.adaptive ? 'Adapting from your own trend and intake.' : 'Fixed — you set this by hand.'}
+            {goal.adaptive ? 'Dostosowuje się do Twojego trendu i spożycia.' : 'Stały, ustawiony ręcznie.'}
           </Text>
         </View>
       ) : null}
@@ -244,21 +245,21 @@ function changeOver(trend: TrendPoint[], days: number): number | null {
   if (!last || !first) return null
   const target = Number.isFinite(days) ? last.day - days : first.day
   const start = [...trend].reverse().find((p) => p.day <= target) ?? first
-  return (last.trendKg - start.trendKg) * LB_PER_KG
+  return last.trendKg - start.trendKg
 }
 
-function ChangeRow({ label, lbs }: { label: string; lbs: number | null }) {
+function ChangeRow({ label, kg }: { label: string; kg: number | null }) {
   const theme = useTheme()
-  const none = lbs == null || Math.abs(lbs) < 0.05
-  const up = (lbs ?? 0) > 0
+  const none = kg == null || Math.abs(kg) < 0.05
+  const up = (kg ?? 0) > 0
   return (
     <View style={styles.changeRow}>
       <Text style={[type.body, { color: theme.textMuted, width: 78 }]}>{label}</Text>
       <Text style={[type.bodyStrong, { color: theme.text, flex: 1 }]}>
-        {lbs == null ? '—' : `${lbs > 0 ? '+' : ''}${lbs.toFixed(1)} lbs`}
+        {kg == null ? '—' : `${kg > 0 ? '+' : ''}${formatDecimal(kg)} kg`}
       </Text>
       <Text style={[type.caption, { color: none ? theme.textMuted : theme.protein }]}>
-        {none ? 'No change' : up ? 'Increase' : 'Decrease'}
+        {none ? 'Bez zmian' : up ? 'Wzrost' : 'Spadek'}
       </Text>
     </View>
   )
@@ -293,7 +294,7 @@ function WeightChart({ trend }: { trend: TrendPoint[] }) {
       ))}
       {gridVals.map((v, i) => (
         <SvgText key={`t${i}`} x={2} y={y(v) + 4} fontSize="10" fill={theme.textFaint}>
-          {(v * LB_PER_KG).toFixed(0)}
+          {formatDecimal(v, 0)}
         </SvgText>
       ))}
       {trend.map((p, i) =>
@@ -305,10 +306,10 @@ function WeightChart({ trend }: { trend: TrendPoint[] }) {
 }
 
 function bmiBand(v: number): string {
-  if (v < 18.5) return 'Underweight'
-  if (v < 25) return 'Healthy'
-  if (v < 30) return 'Overweight'
-  return 'Obese'
+  if (v < 18.5) return 'Niedowaga'
+  if (v < 25) return 'Waga prawidłowa'
+  if (v < 30) return 'Nadwaga'
+  return 'Otyłość'
 }
 
 function BmiScale({ value }: { value: number }) {

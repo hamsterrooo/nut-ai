@@ -1,3 +1,4 @@
+import { formatInteger } from '../../src/i18n/format'
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Alert, Linking } from 'react-native'
@@ -55,7 +56,7 @@ export default function Profile() {
         setDiet(d)
         setHealthAvail(avail === 'available' ? 'available' : avail === 'not-ios' ? 'not-ios' : 'unavailable')
         if (!p || p === 'none') {
-          setProviderLabel('Not connected')
+          setProviderLabel('Niepołączony')
         } else if (p === 'publik') {
           const [connected, wallet] = await Promise.all([publikConnected(), loadPublikWallet()])
           if (!alive) return
@@ -64,10 +65,10 @@ export default function Profile() {
           const unlinkedAtZero = wallet?.claimState === 'anonymous' && wallet.balanceMicros != null && wallet.balanceMicros <= 0
           setProviderLabel(
             !connected
-              ? 'publik API · disconnected'
+              ? 'publik API · rozłączono'
               : unlinkedAtZero
-                ? `publik API · ${formatMicros(0)} · not linked`
-                : `publik API · ${formatMicros(wallet?.balanceMicros)} left`,
+                ? `publik API · ${formatMicros(0)} · niepołączone`
+                : `publik API · ${formatMicros(wallet?.balanceMicros)} zostało`,
           )
         } else {
           const cred = await loadCredential(p as ProviderId)
@@ -75,7 +76,7 @@ export default function Profile() {
           setProviderLabel(
             cred
               ? `${PROVIDER_NAME[p as ProviderId]} · ${maskCredential(cred.value)}`
-              : `${PROVIDER_NAME[p as ProviderId]} · key missing`,
+              : `${PROVIDER_NAME[p as ProviderId]} · brak klucza`,
           )
         }
       })()
@@ -94,11 +95,11 @@ export default function Profile() {
       // iOS never reports whether READ access was granted — claiming success
       // here would be a lie. Say what actually happened and point at Settings.
       if (res.prompted) {
-        Alert.alert('Done', 'If you allowed access, steps and workouts will appear as they sync.')
+        Alert.alert('Gotowe', 'Jeśli zezwolono na dostęp, kroki i treningi pojawią się po synchronizacji.')
       } else {
         Alert.alert(
-          'Health did not respond',
-          'Manage access under Settings → Privacy & Security → Health, or from the button below.',
+          'Zdrowie nie odpowiedziało',
+          'Zarządzaj dostępem w Ustawieniach → Prywatność i ochrona → Zdrowie albo przyciskiem poniżej.',
         )
       }
     })()
@@ -110,9 +111,9 @@ export default function Profile() {
     void (async () => {
       try {
         const res = await exportAndShareBackup()
-        if (!res.shared) Alert.alert('Exported', `Saved to ${res.name}. Sharing is unavailable on this device.`)
+        if (!res.shared) Alert.alert('Wyeksportowano', `Zapisano jako ${res.name}. Udostępnianie jest niedostępne na tym urządzeniu.`)
       } catch {
-        Alert.alert('Export failed', 'Could not write the backup file. Try again.')
+        Alert.alert('Eksport nie powiódł się', 'Nie udało się zapisać pliku kopii. Spróbuj ponownie.')
       } finally {
         setDataBusy(false)
       }
@@ -125,17 +126,17 @@ export default function Profile() {
       const picked = await pickBackupFile()
       if (!picked.ok) {
         if (picked.reason !== 'cancelled') {
-          Alert.alert('Not a backup', "That doesn't look like a Nut AI backup file.")
+          Alert.alert('To nie jest kopia', 'To nie wygląda na plik kopii zapasowej Nut AI.')
         }
         return
       }
       Alert.alert(
-        'Restore this backup?',
-        'This replaces ALL data currently on this device and cannot be undone.',
+        'Przywrócić tę kopię?',
+        'To zastąpi WSZYSTKIE dane obecnie na tym urządzeniu i nie można tego cofnąć.',
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'Anuluj', style: 'cancel' },
           {
-            text: 'Restore',
+            text: 'Przywróć',
             style: 'destructive',
             onPress: () => {
               setDataBusy(true)
@@ -143,7 +144,7 @@ export default function Profile() {
                 try {
                   const outcome = await importBackup(picked.payload)
                   if (!outcome.ok) {
-                    Alert.alert('Cannot restore', 'This backup is from a newer version of Nut AI — update the app first.')
+                    Alert.alert('Nie można przywrócić', 'Ta kopia pochodzi z nowszej wersji Nut AI. Najpierw zaktualizuj aplikację.')
                     return
                   }
                   await finishRestore()
@@ -152,7 +153,7 @@ export default function Profile() {
                   // A restore that fails must SAY SO — the transaction rolled
                   // back, nothing was lost, and silence here cost us a real
                   // debugging session once already.
-                  Alert.alert('Restore failed', `Nothing was changed. ${String((e as Error)?.message ?? e)}`)
+                  Alert.alert('Przywracanie nie powiodło się', `Nic nie zostało zmienione. ${String((e as Error)?.message ?? e)}`)
                 } finally {
                   setDataBusy(false)
                 }
@@ -170,93 +171,93 @@ export default function Profile() {
       contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 150 }}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[type.title, { color: theme.text }]}>Profile</Text>
+      <Text style={[type.title, { color: theme.text }]}>Profil</Text>
 
       <View style={[styles.hero, { backgroundColor: theme.bgSunken }]}>
         <Text style={[type.bodyStrong, { color: theme.text }]}>No account needed</Text>
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
-          Everything lives on this device. There is no sign-in, no server, and nothing to breach.
+          Wszystko jest na tym urządzeniu. Nie ma logowania ani serwera, więc nie ma czego wykradać.
         </Text>
       </View>
 
-      <Section title="Goals & tracking">
+      <Section title="Cele i śledzenie">
         <Row
-          label="Daily target"
+          label="Dzienny cel"
           value={goal ? `${Math.round(goal.targetKcal)} kcal` : '—'}
           onPress={() => router.push('/edit-goals' as never)}
         />
         <Row
-          label="Protein / Carbs / Fat"
+          label="Białko / Węglowodany / Tłuszcz"
           value={goal ? `${Math.round(goal.protein_g)} / ${Math.round(goal.carbs_g)} / ${Math.round(goal.fat_g)} g` : '—'}
           onPress={() => router.push('/edit-goals' as never)}
         />
-        <Row label="Log weight" value="" onPress={() => router.push('/log-weight' as never)} />
-        <Row label="Diet style" value={diet} />
+        <Row label="Zapisz wagę" value="" onPress={() => router.push('/log-weight' as never)} />
+        <Row label="Styl diety" value={diet} />
         <Row
-          label="Adaptive target"
-          value={goal ? (goal.adaptive ? 'On' : 'Off — set by hand') : '—'}
+          label="Cel adaptacyjny"
+          value={goal ? (goal.adaptive ? 'Włączony' : 'Wyłączony, ustawiony ręcznie') : '—'}
         />
       </Section>
 
-      <Section title="AI provider">
-        <Row label="Provider & key" value={providerLabel} onPress={() => router.push('/provider-settings' as never)} />
+      <Section title="Dostawca AI">
+        <Row label="Dostawca i klucz" value={providerLabel} onPress={() => router.push('/provider-settings' as never)} />
       </Section>
 
-      <Section title="Apple Health">
+      <Section title="Apple Zdrowie">
         {healthAvail === 'available' ? (
           <>
             <Row
-              label={healthBusy ? 'Connecting…' : 'Connect / Reconnect'}
+              label={healthBusy ? 'Łączenie…' : 'Połącz / połącz ponownie'}
               value=""
               onPress={connectHealth}
             />
             <Pressable onPress={() => void Linking.openSettings()} style={{ padding: space.lg, paddingTop: 0 }}>
               <Text style={[type.caption, { color: theme.textMuted }]}>
-                Already answered the prompt? <Text style={{ color: theme.protein }}>Manage access in Settings</Text>
+                Już odpowiedziano na prośbę o dostęp? <Text style={{ color: theme.protein }}>Zarządzaj dostępem w Ustawieniach</Text>
               </Text>
             </Pressable>
           </>
         ) : (
-          <Row label="Apple Health" value={healthAvail === 'not-ios' ? 'iOS only' : 'Unavailable on this device'} />
+          <Row label="Apple Zdrowie" value={healthAvail === 'not-ios' ? 'Tylko iOS' : 'Niedostępne na tym urządzeniu'} />
         )}
       </Section>
 
-      <Section title="Your data">
-        <Row label={dataBusy ? 'Working…' : 'Export data'} value="" onPress={exportData} />
-        <Row label="Import data" value="" onPress={importData} />
+      <Section title="Twoje dane">
+        <Row label={dataBusy ? 'Praca w toku…' : 'Eksportuj dane'} value="" onPress={exportData} />
+        <Row label="Importuj dane" value="" onPress={importData} />
         <Text style={[type.caption, { color: theme.textFaint, padding: space.lg, paddingTop: space.xs, lineHeight: 18 }]}>
-          One JSON file with everything: meals, weights, goals, settings. Your API key never
-          travels in it — re-enter that once after restoring on a new phone.
+          Jeden plik JSON ze wszystkim: posiłkami, wagami, celami i ustawieniami. Twój klucz API
+          nigdy w nim nie trafia, więc po przywróceniu na nowym telefonie wpiszesz go jeszcze raz.
         </Text>
       </Section>
 
-      <Section title="How your numbers work">
+      <Section title="Jak działają Twoje liczby">
         {goal ? (
           <View style={{ padding: space.lg, gap: space.sm }}>
-            <Line label="BMR (Mifflin-St Jeor)" value={`${Math.round(goal.bmr)} kcal`} />
-            <Line label="TDEE (BMR × activity)" value={`${Math.round(goal.tdee)} kcal`} />
-            <Line label="Your target" value={`${Math.round(goal.targetKcal)} kcal`} />
+            <Line label="BMR (Mifflin-St Jeor)" value={`${formatInteger(goal.bmr)} kcal`} />
+            <Line label="TDEE (BMR × aktywność)" value={`${formatInteger(goal.tdee)} kcal`} />
+            <Line label="Twój cel" value={`${formatInteger(goal.targetKcal)} kcal`} />
             {goal.floorApplied ? (
               <Text style={[type.caption, { color: theme.uncertain, marginTop: space.xs }]}>
-                Raised to our safe floor. Your inputs alone gave {Math.round(goal.targetRawKcal)} kcal.
+                Podniesiono do naszej bezpiecznej granicy. Same Twoje dane dały {formatInteger(goal.targetRawKcal)} kcal.
               </Text>
             ) : null}
           </View>
         ) : null}
       </Section>
 
-      <Section title="Start over">
+      <Section title="Zacznij od nowa">
         <Row
-          label="Redo onboarding"
+          label="Powtórz konfigurację"
           value=""
           onPress={() => {
             Alert.alert(
-              'Erase everything and start over?',
-              'Deletes your profile, goals, weight history, logged meals and saved API keys from this device, and disconnects publik API. It cannot be undone, and there is no backup on a server because there is no server of ours.',
+              'Usunąć wszystko i zacząć od nowa?',
+              'Usuwa z tego urządzenia Twój profil, cele, historię wagi, zapisane posiłki i zapisane klucze API oraz rozłącza publik API. Nie można tego cofnąć, a kopii na serwerze nie ma, bo nie mamy własnego serwera.',
               [
-                { text: 'Cancel', style: 'cancel' },
+                { text: 'Anuluj', style: 'cancel' },
                 {
-                  text: 'Erase and restart',
+                  text: 'Usuń i zacznij od nowa',
                   style: 'destructive',
                   onPress: () => {
                     void resetEverything().then(() => router.replace('/onboarding' as never))
@@ -268,15 +269,15 @@ export default function Profile() {
         />
       </Section>
 
-      <Section title="About">
-        <Row label="License" value="AGPL-3.0" />
-        <Row label="Nutrition data" value="USDA, CC0" />
+      <Section title="O aplikacji">
+        <Row label="Licencja" value="AGPL-3.0" />
+        <Row label="Dane żywieniowe" value="USDA, CC0" />
       </Section>
 
       <Text style={[type.caption, { color: theme.textFaint, marginTop: space.xl, lineHeight: 19 }]}>
-        Nut AI's estimates are AI-generated approximations and may not be accurate. It is not a
-        medical device and does not diagnose, treat, cure or prevent any condition. Consult a
-        registered dietitian or healthcare provider before making medical decisions.
+        Szacunki Nut AI to przybliżenia wygenerowane przez AI i mogą być niedokładne. Aplikacja
+        nie jest wyrobem medycznym i niczego nie diagnozuje, nie leczy ani nie zapobiega żadnej
+        chorobie. Przed podjęciem decyzji medycznych skonsultuj się z dietetykiem lub lekarzem.
       </Text>
     </ScrollView>
   )

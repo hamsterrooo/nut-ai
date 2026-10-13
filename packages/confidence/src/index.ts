@@ -186,26 +186,26 @@ export function computeBand(input: ComputeBandInput): Band {
   const catHalf = baselines.categoryHalfPct[cat]
   if (catHalf > half) {
     half = catHalf
-    if (cat === 'mixed_composite') reasons.push('Mixed dishes are harder to estimate accurately.')
-    if (cat === 'hidden_fat_likely') reasons.push('Cooking oil is not visible in a photo.')
+    if (cat === 'mixed_composite') reasons.push('Dania mieszane trudniej oszacować dokładnie.')
+    if (cat === 'hidden_fat_likely') reasons.push('Oleju do smażenia nie widać na zdjęciu.')
   }
 
   // 3. Food-class widening for known structural variance.
   if (isGroundMeat(item)) {
     half *= 1.15
-    reasons.push('Ground meat loses 62-77% of its weight cooking, depending on fat content.')
+    reasons.push('Mięso mielone traci 62-77% masy podczas obróbki, zależnie od zawartości tłuszczu.')
   }
   if (isPouredAlcohol(item)) {
     half *= 1.35
-    reasons.push('The alcohol content of a poured drink is not visible.')
+    reasons.push('Zawartości alkoholu w nalanym napoju nie widać.')
   }
   if (isBlendedShake(item)) {
     half *= 1.35
-    reasons.push('A blended drink’s recipe is not visible.')
+    reasons.push('Przepisu na zblendowany napój nie widać.')
   }
   if (isDeepFried(item)) {
     half *= 1.15
-    reasons.push('Fried food absorbs 10-28% of its weight in oil.')
+    reasons.push('Smażone jedzenie wchłania 10-28% swojej masy w oleju.')
   }
 
   // 4. MODIFIER ONLY — the model's own portion confidence. It never replaces the
@@ -213,7 +213,7 @@ export function computeBand(input: ComputeBandInput): Band {
   //    correlate with genuine difficulty, so it earns a nudge and nothing more.
   if (item.portion_confidence < 0.4) {
     half *= 1.5
-    reasons.push('The model said it was unsure about this portion.')
+    reasons.push('Model zaznaczył, że nie jest pewien tej porcji.')
   } else if (item.portion_confidence > 0.8) {
     half *= 0.85
   }
@@ -230,7 +230,7 @@ export function computeBand(input: ComputeBandInput): Band {
     (input.priorRatioVariance ?? 1) < 0.05
   ) {
     half = Math.min(half, baselines.pathwayHalfPct.personal_prior)
-    reasons.push('Narrowed because your own logs for this food are consistent.')
+    reasons.push('Zawężono, bo Twoje wcześniejsze wpisy dla tego produktu są spójne.')
   }
 
   // 7. Empirical agreement — the one genuinely measured per-scan signal, when the
@@ -240,17 +240,17 @@ export function computeBand(input: ComputeBandInput): Band {
     const relDiff = Math.abs(row.grams - second) / Math.max(row.grams, second)
     if (relDiff < 0.15) {
       half *= 0.6
-      reasons.push('Two models independently agreed on this portion.')
+      reasons.push('Dwa modele niezależnie zgodziły się co do tej porcji.')
     } else {
       half *= 1.3
-      reasons.push('Two models disagreed on this portion.')
+      reasons.push('Dwa modele nie zgodziły się co do tej porcji.')
     }
   }
 
   // 8. Clamp flags and generic fallbacks FLOOR the band. They never narrow it.
   if (row.gramPathway === 'clamped' || input.hadClampFlag === true) {
     half = Math.max(half, 0.5)
-    reasons.push('Something about this estimate looked out of range — please check it.')
+    reasons.push('Coś w tym szacunku wyglądało poza zakresem, sprawdź go.')
   }
 
   return {

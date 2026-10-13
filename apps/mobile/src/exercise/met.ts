@@ -20,14 +20,14 @@ export interface IntensityAnchor {
 
 export const INTENSITY_ANCHORS: Record<ExerciseKind, readonly IntensityAnchor[]> = {
   run: [
-    { level: 'high', title: 'High', desc: 'Sprinting — 14 mph (4 minute miles)', met: 12.5 },
-    { level: 'medium', title: 'Medium', desc: 'Jogging — 6 mph (10 minute miles)', met: 9.8 },
-    { level: 'low', title: 'Low', desc: 'Chill walk — 3 mph (20 minute miles)', met: 3.5 },
+    { level: 'high', title: 'Wysoka', desc: 'Sprint, 22,5 km/h (2:40 min/km)', met: 12.5 },
+    { level: 'medium', title: 'Średnia', desc: 'Trucht, 9,7 km/h (6:13 min/km)', met: 9.8 },
+    { level: 'low', title: 'Niska', desc: 'Spokojny spacer, 4,8 km/h (12:26 min/km)', met: 3.5 },
   ],
   weights: [
-    { level: 'high', title: 'High', desc: 'Training to failure, breathing heavily', met: 6.0 },
-    { level: 'medium', title: 'Medium', desc: 'Breaking a sweat, many reps', met: 4.5 },
-    { level: 'low', title: 'Low', desc: 'Not breaking a sweat, giving little effort', met: 3.0 },
+    { level: 'high', title: 'Wysoka', desc: 'Trening do upadku, ciężki oddech', met: 6.0 },
+    { level: 'medium', title: 'Średnia', desc: 'Pocisz się, dużo powtórzeń', met: 4.5 },
+    { level: 'low', title: 'Niska', desc: 'Bez potu, mały wysiłek', met: 3.0 },
   ],
 }
 

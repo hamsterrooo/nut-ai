@@ -39,55 +39,55 @@ export function healthScore(t: MacroTotals, totalGrams?: number): HealthScore | 
   const proteinShare = (4 * t.protein_g) / t.kcal
   if (proteinShare >= 0.3) {
     score += 2.5
-    reasons.push('Very high in protein for its calories')
+    reasons.push('Bardzo dużo białka w stosunku do kalorii')
   } else if (proteinShare >= 0.2) {
     score += 2
-    reasons.push('High in protein for its calories')
+    reasons.push('Dużo białka w stosunku do kalorii')
   } else if (proteinShare >= 0.12) {
     score += 1
-    reasons.push('A reasonable amount of protein')
+    reasons.push('Rozsądna ilość białka')
   }
 
   const fiberPer100 = (t.fiber_g * 100) / t.kcal
   if (fiberPer100 >= 2.5) {
     score += 2
-    reasons.push('Excellent fiber for its calories')
+    reasons.push('Bardzo dużo błonnika w stosunku do kalorii')
   } else if (fiberPer100 >= 1.4) {
     score += 1.5
-    reasons.push('Good fiber for its calories')
+    reasons.push('Dużo błonnika w stosunku do kalorii')
   } else if (fiberPer100 >= 0.7) {
     score += 1
-    reasons.push('Some fiber')
+    reasons.push('Trochę błonnika')
   }
 
   const sugarShare = (4 * t.sugar_g) / t.kcal
   if (sugarShare >= 0.3) {
     score -= 2
-    reasons.push('A large share of these calories is sugar')
+    reasons.push('Duża część tych kalorii pochodzi z cukru')
   } else if (sugarShare >= 0.15) {
     score -= 1
-    reasons.push('A meaningful share of these calories is sugar')
+    reasons.push('Zauważalna część tych kalorii pochodzi z cukru')
   }
 
   const sodiumPer100 = (t.sodium_mg * 100) / t.kcal
   if (sodiumPer100 >= 400) {
     score -= 2
-    reasons.push('Very high in sodium for its calories')
+    reasons.push('Bardzo dużo sodu w stosunku do kalorii')
   } else if (sodiumPer100 >= 230) {
     score -= 1
-    reasons.push('High in sodium for its calories')
+    reasons.push('Dużo sodu w stosunku do kalorii')
   }
 
   if (totalGrams != null && totalGrams > 0) {
     const density = t.kcal / totalGrams
     if (density >= 3) {
       score -= 1
-      reasons.push('Calorie-dense — a small weight carries a lot of energy')
+      reasons.push('Wysoka gęstość kaloryczna: mała masa niesie dużo energii')
     } else if (density <= 1 && sugarShare < 0.15) {
       // The sugar gate matters: soda is low-density because it is water, and
       // "filling for its calories" is exactly the wrong thing to say about it.
       score += 1
-      reasons.push('Low calorie density — filling for its calories')
+      reasons.push('Niska gęstość kaloryczna: syci w stosunku do kalorii')
     }
   }
 

@@ -67,8 +67,13 @@ export const PROVIDER_MODELS: Record<ProviderId, ProviderModel[]> = {
     { id: 'gpt-4o', label: 'GPT-4o', inputPerMTok: 2.5, outputPerMTok: 10, approxScanCostUsd: 0.012 },
   ],
   google: [
-    { id: 'gemini-2.0-flash-lite', label: 'Gemini Flash-Lite', inputPerMTok: 0.075, outputPerMTok: 0.3, approxScanCostUsd: 0.0024 },
-    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', inputPerMTok: 1.25, outputPerMTok: 10, approxScanCostUsd: 0.02 },
+    // gemini-2.0-flash-lite was shut down on 2026-06-01 and gemini-2.5-pro is closed to
+    // projects that never used it, so a fresh key gets a 404 on both. These are the GA
+    // models Google names as the replacements. Google retires model IDs every few
+    // months: when a scan starts failing with "model not available", this is the line.
+    // approxScanCostUsd assumes ~2k input and ~0.6k output tokens per scan.
+    { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite', inputPerMTok: 0.25, outputPerMTok: 1.5, approxScanCostUsd: 0.0014 },
+    { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', inputPerMTok: 1.5, outputPerMTok: 9, approxScanCostUsd: 0.0084 },
   ],
   anthropic: [
     { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', inputPerMTok: 1, outputPerMTok: 5, approxScanCostUsd: 0.005 },

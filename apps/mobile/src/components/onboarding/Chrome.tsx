@@ -38,7 +38,7 @@ export function OnboardingHeader({ step, total }: { step: number; total: number 
     <View style={[styles.header, { paddingTop: insets.top + space.sm }]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Go back"
+        accessibilityLabel="Wstecz"
         onPress={() => router.back()}
         hitSlop={space.sm}
         style={[styles.back, { backgroundColor: theme.isDark ? theme.bgElevated : '#F3F3F6' }]}
@@ -79,7 +79,7 @@ export function OnboardingScreen({
   title,
   subtitle,
   children,
-  cta = 'Continue',
+  cta = 'Dalej',
   onCta,
   ctaDisabled = false,
   secondaryLabel,

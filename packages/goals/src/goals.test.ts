@@ -54,7 +54,7 @@ describe('the safety floor is a hard clamp that always explains itself', () => {
     expect(t.floorApplied).toBe(true)
     expect(t.target).toBeGreaterThan(t.targetRaw)
     expect(t.target).toBe(t.floor)
-    expect(t.floorExplanation).toMatch(/would have been/)
+    expect(t.floorExplanation).toMatch(/wyniósłby/)
     expect(t.floorExplanation).toMatch(String(Math.round(t.targetRaw)))
   })
 
@@ -232,7 +232,7 @@ describe('adaptive TDEE', () => {
     const r = updateAdaptiveTdee({
       currentTdee: 2500, avgDailyIntakeKcal: 2000, trendSlopeLbPerWeek: -1.5, updateCount: 0,
     })
-    expect(r.explanation).toMatch(/losing/)
+    expect(r.explanation).toMatch(/spada/)
     expect(r.explanation).toMatch(/2000 kcal/)
   })
 })

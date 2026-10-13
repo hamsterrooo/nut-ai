@@ -46,18 +46,20 @@ type Step =
   | { kind: 'manual' }
 
 const MENU: Array<{ step: Step; icon: IconName; title: string; sub: string }> = [
-  { step: { kind: 'intensity', exercise: 'run' }, icon: 'run', title: 'Run', sub: 'Running, jogging, sprinting, etc.' },
-  { step: { kind: 'intensity', exercise: 'weights' }, icon: 'dumbbell', title: 'Weight lifting', sub: 'Machines, free weights, etc.' },
-  { step: { kind: 'describe' }, icon: 'pencil', title: 'Describe', sub: 'Write your workout in text' },
-  { step: { kind: 'manual' }, icon: 'flame', title: 'Manual', sub: 'Enter exactly how many calories you burned' },
+  { step: { kind: 'intensity', exercise: 'run' }, icon: 'run', title: 'Bieganie', sub: 'Bieg, trucht, sprint itp.' },
+  { step: { kind: 'intensity', exercise: 'weights' }, icon: 'dumbbell', title: 'Trening siłowy', sub: 'Maszyny, wolne ciężary itp.' },
+  { step: { kind: 'describe' }, icon: 'pencil', title: 'Opisz', sub: 'Opisz trening własnymi słowami' },
+  { step: { kind: 'manual' }, icon: 'flame', title: 'Ręcznie', sub: 'Wpisz dokładnie, ile kalorii spaliłeś lub spaliłaś' },
 ]
 
 const KIND_META: Record<ExerciseKind, { icon: IconName; title: string }> = {
-  run: { icon: 'run', title: 'Run' },
-  weights: { icon: 'dumbbell', title: 'Weight lifting' },
+  run: { icon: 'run', title: 'Bieganie' },
+  weights: { icon: 'dumbbell', title: 'Trening siłowy' },
 }
 
 const DURATIONS = [15, 30, 60, 90] as const
+
+const LEVEL_PL: Record<Intensity, string> = { high: 'wysoka', medium: 'średnia', low: 'niska' }
 
 async function latestWeightKg(): Promise<number> {
   const points = await weightHistory()
@@ -92,7 +94,7 @@ function Header({ title, icon, onBack }: { title: string; icon?: IconName; onBac
     <View style={[styles.header, { paddingTop: insets.top + space.sm }]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Back"
+        accessibilityLabel="Wstecz"
         onPress={onBack}
         style={[styles.backBtn, { backgroundColor: theme.bgSunken }]}
       >
@@ -113,9 +115,9 @@ function MenuScreen({ onPick }: { onPick: (s: Step) => void }) {
   const theme = useTheme()
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <Header title="Exercise" onBack={() => router.back()} />
+      <Header title="Trening" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 120 }}>
-        <Text style={[type.title, { color: theme.text, fontSize: 34 }]}>Log Exercise</Text>
+        <Text style={[type.title, { color: theme.text, fontSize: 34 }]}>Dodaj trening</Text>
 
         <View style={{ marginTop: space.xl, gap: space.md }}>
           {MENU.map((m) => (
@@ -156,7 +158,7 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
     setSaving(true)
     const kg = await latestWeightKg()
     const kcal = exerciseKcal(exercise, level, kg, mins)
-    await saveEntry(`${KIND_META[exercise].title} — ${level}, ${mins} min`, kcal)
+    await saveEntry(`${KIND_META[exercise].title}, intensywność ${LEVEL_PL[level]}, ${mins} min`, kcal)
     router.back()
   }
 
@@ -166,7 +168,7 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 140 }}>
         <View style={styles.sectionHead}>
           <Icon name="sun" size={20} color={theme.text} />
-          <Text style={[type.title, { color: theme.text, fontSize: 26 }]}>Set intensity</Text>
+          <Text style={[type.title, { color: theme.text, fontSize: 26 }]}>Ustaw intensywność</Text>
         </View>
 
         <View style={[styles.intensityCard, { backgroundColor: theme.bgSunken }]}>
@@ -198,7 +200,7 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
               <Pressable
                 key={a.level}
                 accessibilityRole="button"
-                accessibilityLabel={`${a.title} intensity`}
+                accessibilityLabel={`Intensywność: ${a.title}`}
                 onPress={() => setLevel(a.level)}
                 style={[styles.trackZone, { top: `${(i * 100) / 3}%` as const }]}
               />
@@ -232,14 +234,14 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
                     : { borderWidth: 1.5, borderColor: theme.text },
                 ]}
               >
-                <Text style={[type.bodyStrong, { color: active ? theme.bg : theme.text }]}>{d} mins</Text>
+                <Text style={[type.bodyStrong, { color: active ? theme.bg : theme.text }]}>{d} min</Text>
               </Pressable>
             )
           })}
         </View>
 
         <TextInput
-          accessibilityLabel="Duration in minutes"
+          accessibilityLabel="Czas trwania w minutach"
           keyboardType="number-pad"
           value={minutes}
           onChangeText={setMinutes}
@@ -254,7 +256,7 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
           style={[styles.cta, { backgroundColor: valid ? theme.text : theme.border }]}
         >
           <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>
-            {saving ? 'Saving…' : 'Continue'}
+            {saving ? 'Zapisywanie…' : 'Dalej'}
           </Text>
         </Pressable>
       </View>
@@ -287,8 +289,8 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
         r.error.kind === 'publik-disconnected'
           ? DISCONNECTED_MESSAGE
           : r.error.kind === 'key-missing'
-            ? 'Your saved key is missing. Re-enter it in Profile.'
-            : `Describing a workout needs ${publikAvailable() ? 'publik API or ' : ''}an AI key — connect one in Profile, or use Run, Weight lifting or Manual instead.`,
+            ? 'Brak zapisanego klucza. Wpisz go ponownie w Profilu.'
+            : `Opis treningu wymaga ${publikAvailable() ? 'publik API lub ' : ''}klucza AI. Podłącz go w Profilu albo użyj opcji Bieganie, Trening siłowy lub Ręcznie.`,
       )
       return
     }
@@ -304,7 +306,7 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
 
     if (!parsed?.success) {
       setBusy(false)
-      setError(outcome.ok ? 'Could not turn that into an estimate — try adding a duration.' : (outcome.error?.message ?? 'The estimate failed.'))
+      setError(outcome.ok ? 'Nie udało się zamienić tego na szacunek. Spróbuj dodać czas trwania.' : (outcome.error?.message ?? 'Szacowanie nie powiodło się.'))
       return
     }
 
@@ -315,11 +317,11 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <Header title="Describe Exercise" onBack={onBack} />
+      <Header title="Opisz trening" onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: space.lg }} keyboardShouldPersistTaps="handled">
         <TextInput
           autoFocus
-          placeholder="Describe workout time, intensity, etc."
+          placeholder="Opisz czas, intensywność itp."
           placeholderTextColor={theme.textFaint}
           value={text}
           onChangeText={(t) => {
@@ -332,14 +334,14 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
         <View style={[styles.aiPill, { borderColor: theme.border }]}>
           <Icon name="scan" size={14} color={theme.text} />
           <Text style={[type.label, { color: theme.text }]}>
-            {viaPublik ? 'Estimated with publik API' : 'Estimated with your API key'}
+            {viaPublik ? 'Oszacowano przez publik API' : 'Oszacowano Twoim kluczem API'}
           </Text>
         </View>
 
         <View style={[styles.example, { backgroundColor: theme.bgSunken }]}>
           <Text style={[type.body, { color: theme.textMuted, lineHeight: 22 }]}>
-            <Text style={{ fontWeight: '700', color: theme.text }}>Example:</Text> Leg strength
-            training for 35 mins, 9/10 intensity
+            <Text style={{ fontWeight: '700', color: theme.text }}>Przykład:</Text> Trening siłowy
+            nóg przez 35 minut, intensywność 9/10
           </Text>
         </View>
 
@@ -359,7 +361,7 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
           style={[styles.cta, { backgroundColor: text.trim() && !busy ? theme.text : theme.border }]}
         >
           <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>
-            {busy ? 'Estimating…' : 'Add Exercise'}
+            {busy ? 'Szacowanie…' : 'Dodaj trening'}
           </Text>
         </Pressable>
       </View>
@@ -386,12 +388,12 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <Header title="Manual" icon="flame" onBack={onBack} />
+      <Header title="Ręcznie" icon="flame" onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: space.lg }} keyboardShouldPersistTaps="handled">
-        <Text style={[type.label, { color: theme.textMuted }]}>Calories burned</Text>
+        <Text style={[type.label, { color: theme.textMuted }]}>Spalone kalorie</Text>
         <TextInput
           autoFocus
-          accessibilityLabel="Calories burned"
+          accessibilityLabel="Spalone kalorie"
           keyboardType="number-pad"
           placeholder="250"
           placeholderTextColor={theme.textFaint}
@@ -400,10 +402,10 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
           style={[styles.minutesInput, { color: theme.text, borderColor: theme.border, marginTop: space.sm }]}
         />
 
-        <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Name (optional)</Text>
+        <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Nazwa (opcjonalnie)</Text>
         <TextInput
-          accessibilityLabel="Exercise name"
-          placeholder="Workout"
+          accessibilityLabel="Nazwa treningu"
+          placeholder="Trening"
           placeholderTextColor={theme.textFaint}
           value={name}
           onChangeText={setName}
@@ -411,7 +413,7 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
         />
 
         <Text style={[type.caption, { color: theme.textFaint, marginTop: space.lg, lineHeight: 19 }]}>
-          Recorded exactly as entered. Your number, your log.
+          Zapisane dokładnie tak, jak wpisano. Twoja liczba, Twój dziennik.
         </Text>
       </ScrollView>
 
@@ -421,7 +423,7 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
           disabled={!valid || saving}
           style={[styles.cta, { backgroundColor: valid ? theme.text : theme.border }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Add Exercise</Text>
+          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Dodaj trening</Text>
         </Pressable>
       </View>
     </View>

@@ -5,12 +5,12 @@ export default function SexScreen() {
     <OptionScreen
       step="sex"
       field="sex"
-      title="Choose your sex"
-      subtitle="This is used only for the BMR equation that sets your calorie target."
+      title="Wybierz płeć"
+      subtitle="Używamy tego wyłącznie w równaniu BMR, które ustala Twój cel kaloryczny."
       options={[
-        { value: 'male', label: 'Male', glyph: 'male' },
-        { value: 'female', label: 'Female', glyph: 'female' },
-        { value: 'unspecified', label: 'Other', glyph: 'nonbinary' },
+        { value: 'male', label: 'Mężczyzna', glyph: 'male' },
+        { value: 'female', label: 'Kobieta', glyph: 'female' },
+        { value: 'unspecified', label: 'Inna', glyph: 'nonbinary' },
       ]}
     />
   )

@@ -172,7 +172,7 @@ export function computeCalorieTarget(input: TargetInputs): CalorieTarget {
     floor,
     floorApplied,
     floorExplanation: floorApplied
-      ? `Your target would have been ${Math.round(targetRaw)} kcal, but we don't go below ${Math.round(floor)} kcal.`
+      ? `Twój cel wyniósłby ${Math.round(targetRaw)} kcal, ale nie schodzimy poniżej ${Math.round(floor)} kcal.`
       : null,
     warnings,
   }
@@ -353,18 +353,19 @@ export function updateAdaptiveTdee(input: AdaptiveTdeeInput): AdaptiveTdeeResult
   const delta = newTdee - input.currentTdee
   const shouldSurface = Math.abs(delta) >= TARGET_CHANGE_THRESHOLD_KCAL
 
-  const direction =
+  const kgPerWeek = (Math.abs(input.trendSlopeLbPerWeek) / LB_PER_KG).toFixed(2).replace('.', ',')
+  const trend =
     input.trendSlopeLbPerWeek < 0
-      ? 'losing'
+      ? `Twoja waga spada o ok. ${kgPerWeek} kg tygodniowo`
       : input.trendSlopeLbPerWeek > 0
-        ? 'gaining'
-        : 'holding steady'
+        ? `Twoja waga rośnie o ok. ${kgPerWeek} kg tygodniowo`
+        : 'Twoja waga jest stabilna'
 
   return {
     observedTdee,
     newTdee,
     shouldSurface,
-    explanation: `Over the last few weeks you've been ${direction} at about ${Math.abs(input.trendSlopeLbPerWeek).toFixed(2)} lb/week while averaging ${Math.round(input.avgDailyIntakeKcal)} kcal a day.`,
+    explanation: `W ostatnich tygodniach ${trend}, przy średnim spożyciu ${Math.round(input.avgDailyIntakeKcal)} kcal dziennie.`,
   }
 }
 

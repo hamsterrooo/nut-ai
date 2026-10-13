@@ -273,7 +273,7 @@ export async function runPipeline(
       items.push({
         row: {
           id: `item-${index}-oil`,
-          displayName: 'Cooking oil (absorbed)',
+          displayName: 'Olej do smażenia (wchłonięty)',
           sourceFoodId: null,
           grams: gram.addedOilGrams,
           // Per 100 g of vegetable oil.
@@ -284,7 +284,7 @@ export async function runPipeline(
           isEstimate: true,
           assumptions: [{ type: 'oil_added', gramsEquiv: gram.addedOilGrams, userConfirmed: false }],
         },
-        band: { halfPct: 0.5, tier: 'very_wide', reasons: ['Absorbed frying oil is not visible.'] },
+        band: { halfPct: 0.5, tier: 'very_wide', reasons: ['Wchłoniętego oleju do smażenia nie widać.'] },
         resolution: 'miss',
         gramPathway: gram.pathway,
       })

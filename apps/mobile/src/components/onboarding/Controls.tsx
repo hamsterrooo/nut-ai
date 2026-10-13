@@ -1,3 +1,4 @@
+import { formatDecimal } from '../../i18n/format'
 import * as Haptics from 'expo-haptics'
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -313,7 +314,7 @@ export function EditableValue({
             onChangeText={setDraft}
             onSubmitEditing={commit}
             onBlur={commit}
-            accessibilityLabel={`${label ?? 'Value'} in ${unit}`}
+            accessibilityLabel={`${label ?? 'Wartość'} (${unit})`}
             style={[
               styles.editInput,
               { color: theme.text, borderBottomColor: theme.text },
@@ -324,17 +325,17 @@ export function EditableValue({
       ) : (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${value.toFixed(1)} ${unit}. Tap to type an exact value.`}
+          accessibilityLabel={`${formatDecimal(value)} ${unit}. Dotknij, aby wpisać dokładną wartość.`}
           hitSlop={space.md}
           onPress={() => {
             void Haptics.selectionAsync()
-            setDraft(value.toFixed(1))
+            setDraft(formatDecimal(value))
             setEditing(true)
           }}
           style={styles.editRow}
         >
           <Text style={[styles.readoutValue, { color: theme.text }]}>
-            {value.toFixed(1)} {unit}
+            {formatDecimal(value)} {unit}
           </Text>
           <View style={{ marginLeft: space.sm }}>
             <Icon name="pencil" size={16} color={theme.textFaint} />

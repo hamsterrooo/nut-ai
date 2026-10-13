@@ -90,26 +90,27 @@ export default function RolloverScreen() {
     <OnboardingScreen
       step={stepIndex('rollover')}
       total={TOTAL_STEPS}
-      title="Rollover extra calories to the next day?"
-      cta="Yes"
+      title="Przenosić niewykorzystane kalorie na następny dzień?"
+      cta="Tak"
       onCta={() => choose(true)}
-      secondaryLabel="No"
+      secondaryLabel="Nie"
       onSecondary={() => choose(false)}
       scroll
     >
       <Text style={[type.bodyStrong, { color: theme.text, marginTop: -space.md, marginBottom: space.xl }]}>
-        Rollover up to <Text style={{ color: theme.protein }}>{ROLLOVER_CAP_KCAL} cals</Text>
+        Przenoś do <Text style={{ color: theme.protein }}>{ROLLOVER_CAP_KCAL} kcal</Text>
       </Text>
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-        <DayCard day="Yesterday" eaten={2350} target={2500} />
-        <DayCard day="Today" eaten={2350} target={2500} bonus={150} style={{ marginTop: space.xxl, marginLeft: -space.xl }} />
+        <DayCard day="Wczoraj" eaten={2350} target={2500} />
+        <DayCard day="Dziś" eaten={2350} target={2500} bonus={150} style={{ marginTop: space.xxl, marginLeft: -space.xl }} />
       </View>
 
       <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xl }]}>
-        Capped at {ROLLOVER_CAP_KCAL} a day on purpose. Banking a whole week of unused calories
-        into one day is the pattern that turns tracking into restrict-then-binge, so we don't
-        allow it. You can change this any time in Settings.
+        Limit {ROLLOVER_CAP_KCAL} kcal dziennie jest celowy. Odkładanie całego tygodnia
+        niewykorzystanych kalorii na jeden dzień to wzorzec, który zamienia liczenie w cykl
+        głodzenia i objadania się, więc na to nie pozwalamy. Zmienisz to w każdej chwili w
+        Ustawieniach.
       </Text>
     </OnboardingScreen>
   )

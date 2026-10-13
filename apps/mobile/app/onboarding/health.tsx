@@ -64,8 +64,8 @@ export default function HealthScreen() {
     // Deliberately not "Connected!". See the note above about read status.
     setOutcome(
       res.canWrite
-        ? 'Health is set up. Meals you log will be written to the Health app.'
-        : 'Health sheet completed. Whatever you allowed there is what we can use — iOS does not tell apps which reads were granted.',
+        ? 'Zdrowie jest skonfigurowane. Zapisane posiłki trafią do aplikacji Zdrowie.'
+        : 'Okno Zdrowie zostało zamknięte. Możemy korzystać z tego, na co tam zezwolisz. iOS nie informuje aplikacji, które odczyty zostały przyznane.',
     )
   }
 
@@ -76,10 +76,10 @@ export default function HealthScreen() {
       step={stepIndex('health')}
       total={TOTAL_STEPS}
       title=""
-      cta={outcome || unsupported ? 'Continue' : 'Connect to Health'}
+      cta={outcome || unsupported ? 'Dalej' : 'Połącz z Apple Zdrowie'}
       onCta={outcome || unsupported ? go : connect}
       ctaDisabled={busy}
-      {...(outcome ? {} : { secondaryLabel: 'Skip' })}
+      {...(outcome ? {} : { secondaryLabel: 'Pomiń' })}
       onSecondary={() => {
         setAnswer('healthConnected', false)
         go()
@@ -98,7 +98,7 @@ export default function HealthScreen() {
             </View>
           </View>
           <View style={styles.wordRow}>
-            {['Steps', 'Workouts', 'Weight', 'Energy'].map((w) => (
+            {['Kroki', 'Treningi', 'Waga', 'Energia'].map((w) => (
               <View key={w} style={[styles.word, { backgroundColor: theme.bgElevated }]}>
                 <Text style={[type.label, { color: theme.text }]}>{w}</Text>
               </View>
@@ -107,10 +107,10 @@ export default function HealthScreen() {
         </View>
       </View>
 
-      <Text style={[styles.heading, { color: theme.text }]}>Connect to Apple Health</Text>
+      <Text style={[styles.heading, { color: theme.text }]}>Połącz z Apple Zdrowie</Text>
       <Text style={[type.body, { color: theme.textMuted, marginTop: space.md }]}>
-        Sync your daily activity between Nut AI and the Health app so your calorie target reflects
-        what you actually did.
+        Synchronizuj codzienną aktywność między Nut AI a aplikacją Zdrowie, żeby Twój cel
+        kaloryczny uwzględniał to, co faktycznie robisz.
       </Text>
 
       {busy ? (
@@ -129,15 +129,15 @@ export default function HealthScreen() {
         <View style={[styles.note, { backgroundColor: theme.uncertainBg }]}>
           <Text style={[type.caption, { color: theme.text }]}>
             {avail === 'not-ios'
-              ? 'Apple Health is iOS only. On Android this will use Health Connect instead.'
-              : 'Health data is not available on this device, so there is nothing to connect to.'}
+              ? 'Apple Zdrowie działa tylko na iOS. Na Androidzie zostanie użyte Health Connect.'
+              : 'Dane zdrowotne nie są dostępne na tym urządzeniu, więc nie ma z czym się łączyć.'}
           </Text>
         </View>
       ) : null}
 
       <Text style={[type.caption, { color: theme.textFaint, marginTop: space.lg, lineHeight: 19 }]}>
-        We ask to read steps, workouts, weight and active energy, and to write back the meals you
-        log. Nothing else. You can change any of it later in the Health app under Sources.
+        Prosimy o odczyt kroków, treningów, wagi i aktywnej energii oraz o zapis posiłków, które
+        dodajesz. Nic więcej. Wszystko zmienisz później w aplikacji Zdrowie, w sekcji Źródła.
       </Text>
     </OnboardingScreen>
   )

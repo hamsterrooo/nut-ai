@@ -11,13 +11,18 @@ import {
 import { Icon, type IconName } from '../../src/components/Icon'
 import { ProgressChart } from '../../src/components/onboarding/Charts'
 import { persistOnboarding } from '../../src/onboarding/persist'
+import { formatDate, formatDecimal, formatInteger } from '../../src/i18n/format'
 import {
+  ACTIVITY_LABEL_PL,
   activityFor,
   ageFrom,
   DIET_BIAS,
   featureDefaultsFor,
   inferredGoal,
   kgToLb,
+  LB_PER_KG,
+  MILK_LABEL_PL,
+  TODAY_EMPHASIS_LABEL_PL,
   todayEmphasisFor,
   useAnswers,
 } from '../../src/onboarding/store'
@@ -52,16 +57,19 @@ export default function PlanScreen() {
   const derivedGoal = inferredGoal(a)
 
   const plan = useMemo(() => {
+    const nowMs = Date.now()
     const body: BodyInputs = {
       sex: a.sex ?? 'unspecified',
       weightKg: a.weightKg ?? 80,
       heightCm: a.heightCm ?? 170,
-      ageYears: ageFrom(a, Date.parse('2026-08-01T00:00:00Z')),
+      ageYears: ageFrom(a, nowMs),
     }
 
     const currentKg = a.weightKg ?? 80
     const targetKg = a.desiredWeightKg ?? currentKg
-    const deltaLb = Math.abs(kgToLb(targetKg) - kgToLb(currentKg))
+    const deltaKg = Math.abs(targetKg - currentKg)
+    // @nutai/goals does its arithmetic in pounds per week; that stays internal.
+    const deltaLb = kgToLb(deltaKg)
 
     // A sane default rate, then let the floor clamp argue with it if it must.
     const rate = derivedGoal === 'maintain' ? 0 : Math.min(1, Math.max(0.25, deltaLb / 12))
@@ -76,17 +84,17 @@ export default function PlanScreen() {
 
     // Target date from the actual arithmetic, not a flattering guess.
     const weeks = rate > 0 ? deltaLb / rate : 0
-    const date = new Date(Date.parse('2026-08-01T00:00:00Z') + weeks * 7 * 86_400_000)
-    const dateLabel = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+    const date = new Date(nowMs + weeks * 7 * 86_400_000)
+    const dateLabel = formatDate(date)
 
-    return { target, macros, deltaLb, dateLabel, rate }
+    return { target, macros, deltaKg, dateLabel, rateKg: rate / LB_PER_KG, rateLb: rate }
   }, [a, derivedGoal])
 
   const gaining = derivedGoal === 'gain'
   const goalLine =
     derivedGoal === 'maintain'
-      ? 'Goal: maintain your weight'
-      : `Goal: ${gaining ? 'gain' : 'lose'} ${plan.deltaLb.toFixed(0)} lbs by ${plan.dateLabel}`
+      ? 'Cel: utrzymać wagę'
+      : `Cel: ${gaining ? 'przytyć' : 'schudnąć'} ${formatDecimal(plan.deltaKg, 0)} kg do ${plan.dateLabel}`
 
   const features = featureDefaultsFor(a.blocker)
   const diet = a.dietStyle ? DIET_BIAS[a.dietStyle] : null
@@ -110,17 +118,17 @@ export default function PlanScreen() {
 
         <View style={{ marginTop: space.xl }}>
           <ProgressChart
-            targetLabel={`${kgToLb(a.desiredWeightKg ?? a.weightKg ?? 80).toFixed(1)} lbs`}
-            dateLabel={derivedGoal === 'maintain' ? 'Ongoing' : plan.dateLabel}
+            targetLabel={`${formatDecimal(a.desiredWeightKg ?? a.weightKg ?? 80)} kg`}
+            dateLabel={derivedGoal === 'maintain' ? 'Na bieżąco' : plan.dateLabel}
             gaining={gaining}
           />
         </View>
 
         {/* Daily recommendation */}
         <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
-          <Text style={[type.heading, { color: theme.text }]}>Your daily recommendation</Text>
+          <Text style={[type.heading, { color: theme.text }]}>Twoje dzienne zalecenie</Text>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-            You can edit this anytime
+            Możesz to zmienić w każdej chwili
           </Text>
 
           <View style={[styles.bigCard, { backgroundColor: theme.bgElevated }]}>
@@ -129,26 +137,26 @@ export default function PlanScreen() {
             </View>
             <View>
               <Text style={[styles.bigNum, { color: theme.text }]}>
-                {Math.round(plan.target.target)}
+                {formatInteger(plan.target.target)}
               </Text>
-              <Text style={[type.caption, { color: theme.textMuted }]}>Calories</Text>
+              <Text style={[type.caption, { color: theme.textMuted }]}>Kalorie</Text>
             </View>
           </View>
 
           <View style={styles.macroRow}>
-            <MacroCard label="Protein" value={plan.macros.protein_g} icon="protein" color={theme.protein} />
-            <MacroCard label="Carbs" value={plan.macros.carbs_g} icon="carbs" color={theme.carbs} />
-            <MacroCard label="Fats" value={plan.macros.fat_g} icon="fat" color={theme.fat} />
+            <MacroCard label="Białko" value={plan.macros.protein_g} icon="protein" color={theme.protein} />
+            <MacroCard label="Węglowodany" value={plan.macros.carbs_g} icon="carbs" color={theme.carbs} />
+            <MacroCard label="Tłuszcze" value={plan.macros.fat_g} icon="fat" color={theme.fat} />
           </View>
         </View>
 
         {/* The floor clamp explains itself, in words, right where it applied. */}
         {plan.target.floorApplied ? (
           <View style={[styles.notice, { backgroundColor: theme.uncertainBg }]}>
-            <Text style={[type.bodyStrong, { color: theme.text }]}>We raised your target</Text>
+            <Text style={[type.bodyStrong, { color: theme.text }]}>Podnieśliśmy Twój cel</Text>
             <Text style={[type.caption, { color: theme.text, marginTop: space.xs }]}>
-              {plan.target.floorExplanation} Eating below that is not a faster route to your goal,
-              it is a slower one with worse side effects.
+              {plan.target.floorExplanation} Jedzenie poniżej tej granicy nie przybliża do celu,
+              tylko spowalnia go i pogarsza samopoczucie.
             </Text>
           </View>
         ) : null}
@@ -161,77 +169,77 @@ export default function PlanScreen() {
 
         {/* Where the number came from. The reference shows none of this. */}
         <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
-          <Text style={[type.heading, { color: theme.text }]}>How we got there</Text>
+          <Text style={[type.heading, { color: theme.text }]}>Skąd to się wzięło</Text>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-            No black box. Check our arithmetic.
+            Bez czarnej skrzynki. Sprawdź nasze rachunki.
           </Text>
           <View style={[styles.mathCard, { backgroundColor: theme.bgElevated }]}>
-            <MathRow label="BMR (Mifflin-St Jeor)" value={`${Math.round(plan.target.bmr)} kcal`} />
+            <MathRow label="BMR (Mifflin-St Jeor)" value={`${formatInteger(plan.target.bmr)} kcal`} />
             <MathRow
-              label={`× activity (${activityFor(a.workoutsPerWeek)})`}
-              value={`${Math.round(plan.target.tdee)} kcal`}
+              label={`× aktywność (${ACTIVITY_LABEL_PL[activityFor(a.workoutsPerWeek)]})`}
+              value={`${formatInteger(plan.target.tdee)} kcal`}
             />
             {derivedGoal !== 'maintain' ? (
               <MathRow
-                label={`${gaining ? '+' : '−'} ${plan.rate.toFixed(2)} lb/week`}
-                value={`${gaining ? '+' : '−'}${Math.round((plan.rate * KCAL_PER_LB) / 7)} kcal`}
+                label={`${gaining ? '+' : '−'} ${formatDecimal(plan.rateKg, 2)} kg/tydzień`}
+                value={`${gaining ? '+' : '−'}${formatInteger((plan.rateLb * KCAL_PER_LB) / 7)} kcal`}
               />
             ) : null}
-            <MathRow label="Your daily target" value={`${Math.round(plan.target.target)} kcal`} strong />
+            <MathRow label="Twój dzienny cel" value={`${formatInteger(plan.target.target)} kcal`} strong />
           </View>
         </View>
 
         {/* Your info */}
         <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
-          <Text style={[type.heading, { color: theme.text }]}>Your info</Text>
+          <Text style={[type.heading, { color: theme.text }]}>Twoje dane</Text>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-            Based on your inputs.
+            Na podstawie Twoich odpowiedzi.
           </Text>
           <View style={[styles.mathCard, { backgroundColor: theme.bgElevated }]}>
-            <InfoRow icon="person" label="Starting weight" value={`${kgToLb(a.weightKg ?? 80).toFixed(1)} lbs`} />
-            <InfoRow icon="target" label="Goal weight" value={`${kgToLb(a.desiredWeightKg ?? a.weightKg ?? 80).toFixed(1)} lbs`} />
-            <InfoRow icon="steps" label="Activity level" value={activityFor(a.workoutsPerWeek)} />
-            {diet ? <InfoRow icon="bowl" label="Diet" value={diet.label} /> : null}
+            <InfoRow icon="person" label="Waga początkowa" value={`${formatDecimal(a.weightKg ?? 80)} kg`} />
+            <InfoRow icon="target" label="Waga docelowa" value={`${formatDecimal(a.desiredWeightKg ?? a.weightKg ?? 80)} kg`} />
+            <InfoRow icon="steps" label="Poziom aktywności" value={ACTIVITY_LABEL_PL[activityFor(a.workoutsPerWeek)] ?? ''} />
+            {diet ? <InfoRow icon="bowl" label="Dieta" value={diet.label} /> : null}
           </View>
         </View>
 
         {/* What your answers actually switched on. */}
         <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
-          <Text style={[type.heading, { color: theme.text }]}>What we set up for you</Text>
+          <Text style={[type.heading, { color: theme.text }]}>Co dla Ciebie ustawiliśmy</Text>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-            From your answers. All of it is changeable in Settings.
+            Na podstawie Twoich odpowiedzi. Wszystko zmienisz w Ustawieniach.
           </Text>
           <View style={{ marginTop: space.md, gap: space.sm }}>
             {diet ? (
-              <Bullet text={`Food matches biased toward a ${diet.label.toLowerCase()} diet, and "what kind of milk?" defaults to ${diet.defaultMilk}.`} />
+              <Bullet text={`Dopasowania produktów uwzględniają dietę (${diet.label.toLowerCase()}), a odpowiedź domyślna na pytanie o mleko to: ${MILK_LABEL_PL[diet.defaultMilk] ?? diet.defaultMilk}.`} />
             ) : null}
-            {features.remindersOn ? <Bullet text="Reminders on, learned from when you actually log." /> : null}
-            {features.savedMealsPinned ? <Bullet text="Saved meals pinned for one-tap relogging." /> : null}
-            {features.showHealthScore ? <Bullet text="Health score shown, with its formula published." /> : null}
-            {features.showMealIdeas ? <Bullet text="Meal ideas surfaced on the Today screen." /> : null}
+            {features.remindersOn ? <Bullet text="Przypomnienia włączone, dopasowane do pór, o których faktycznie zapisujesz posiłki." /> : null}
+            {features.savedMealsPinned ? <Bullet text="Zapisane posiłki przypięte, żeby dodać je jednym dotknięciem." /> : null}
+            {features.showHealthScore ? <Bullet text="Ocena zdrowotności widoczna, razem z opisem wzoru." /> : null}
+            {features.showMealIdeas ? <Bullet text="Pomysły na posiłki na ekranie Dziś." /> : null}
             {a.worksWithProfessional ? (
-              <Bullet text="Shareable export enabled, and we'll keep our coaching suggestions out of your way." />
+              <Bullet text="Eksport do udostępnienia włączony, a własne podpowiedzi zejdą Ci z drogi." />
             ) : null}
-            {a.rolloverCalories ? <Bullet text="Unused calories roll over, capped at 200 a day." /> : null}
-            <Bullet text={`Today screen leads with ${todayEmphasisFor(a.accomplish)}.`} />
+            {a.rolloverCalories ? <Bullet text="Niewykorzystane kalorie przechodzą na kolejny dzień, maksymalnie 200 dziennie." /> : null}
+            <Bullet text={`Ekran Dziś na początku pokazuje: ${TODAY_EMPHASIS_LABEL_PL[todayEmphasisFor(a.accomplish)]}.`} />
           </View>
         </View>
 
         {/* How to reach your goals */}
         <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
-          <Text style={[type.heading, { color: theme.text }]}>How to reach your goals</Text>
+          <Text style={[type.heading, { color: theme.text }]}>Jak osiągnąć cele</Text>
           <View style={{ marginTop: space.md, gap: space.sm }}>
-            <HowRow icon="scan" text="Track your food" />
-            <HowRow icon="flame" text="Follow your daily calorie recommendation" />
-            <HowRow icon="scaleBalance" text="Balance your carbs, protein and fat" />
-            <HowRow icon="chart" text="Check the trend, not the daily number" />
+            <HowRow icon="scan" text="Zapisuj to, co jesz" />
+            <HowRow icon="flame" text="Trzymaj się dziennego zalecenia kalorycznego" />
+            <HowRow icon="scaleBalance" text="Zbilansuj węglowodany, białko i tłuszcze" />
+            <HowRow icon="chart" text="Patrz na trend, a nie na wynik z jednego dnia" />
           </View>
         </View>
 
         <Text style={[type.caption, { color: theme.textFaint, marginTop: space.xl, lineHeight: 19 }]}>
-          These are estimates from population equations, not measurements of you. Nut AI is not a
-          medical device. Adjust anything that does not fit, and talk to a dietitian or doctor
-          before making medical decisions.
+          To szacunki z równań populacyjnych, a nie pomiary Twojego organizmu. Nut AI nie jest
+          wyrobem medycznym. Popraw wszystko, co nie pasuje, a decyzje medyczne skonsultuj
+          z dietetykiem lub lekarzem.
         </Text>
       </ScrollView>
 
@@ -253,7 +261,7 @@ export default function PlanScreen() {
           }}
           style={[styles.cta, { backgroundColor: theme.text }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Let's get started!</Text>
+          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Zaczynamy!</Text>
         </Pressable>
       </View>
     </View>

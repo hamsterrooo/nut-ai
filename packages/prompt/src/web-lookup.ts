@@ -4,8 +4,8 @@ import type { ProviderId, ProviderRequest } from './providers.js'
 /**
  * Web-search refinement for branded and restaurant food.
  *
- * The local corpus is USDA — deep on generic and chain-restaurant staples, blind
- * to this month's menu items and most branded SKUs. When the resolver misses on
+ * The local corpus is USDA plus Polish packaged products — deep on generic staples,
+ * blind to this month's menu items and many branded SKUs. When the resolver misses on
  * an item the model believes is branded, a SECOND call runs with the provider's
  * own server-side web-search tool and asks it to transcribe the brand's
  * published nutrition facts.
@@ -28,7 +28,7 @@ import type { ProviderId, ProviderRequest } from './providers.js'
  *   uniform across all three providers.
  */
 
-export const WEB_LOOKUP_PROMPT_VERSION = 'weblookup-1'
+export const WEB_LOOKUP_PROMPT_VERSION = 'weblookup-2-pl'
 
 export function buildWebLookupInstruction(input: {
   itemName: string
@@ -41,14 +41,17 @@ export function buildWebLookupInstruction(input: {
     input.visualContext ? `Visual context from the photo: ${input.visualContext}` : '',
     '',
     'Rules:',
+    '- The product is sold in Poland. Search Polish sources first and in Polish: the manufacturer\'s or retailer\'s own product page (e.g. Biedronka, Lidl, Żabka, Auchan, Kaufland, Carrefour), the restaurant\'s own "wartości odżywcze" or "alergeny i wartości" page, then Open Food Facts Polska (pl.openfoodfacts.org) or a Polish regulator or national food-composition table. Use a foreign or English source only when no Polish one exists.',
     '- Prefer the brand or restaurant\'s own nutrition page; a regulator or major nutrition database is acceptable when the brand publishes nothing.',
     '- TRANSCRIBE values exactly as published. Never estimate, average, or fill gaps from general knowledge. A nutrient the source does not list is null.',
-    '- If the description matches several menu items or variants (size, flavor, preparation), return up to 6 of the closest as separate options, EACH with its own published values, and set "question" to a short question a user could answer at a glance (e.g. "Which sandwich was it?").',
+    '- Polish pages usually publish values per 100 g (or 100 ml) and sometimes per portion. Prefer the per-portion column when it prints the portion weight; otherwise return the per-100 g values with serving_g 100 and serving_desc "100 g". Never mix columns.',
+    '- Polish pages publish SALT (sól) in grams, not sodium. Put it in salt_g and leave sodium_mg null unless the page prints sodium (sód). Polish decimals use a comma: "3,5" means 3.5.',
+    '- If the description matches several menu items or variants (size, flavor, preparation), return up to 6 of the closest as separate options, EACH with its own published values, and set "question" to a short question in Polish a user could answer at a glance (e.g. "Który to był burger?"). Option labels stay as published.',
     '- If exactly one item matches, return it as the single option and set "question" to null.',
     '- If you cannot find published facts, set "found" to false and return an empty options array.',
     '',
     'Respond with ONLY this JSON object, no prose:',
-    '{"found": boolean, "source_url": string|null, "question": string|null, "options": [{"label": string, "serving_g": number|null, "serving_desc": string|null, "calories_kcal": number, "protein_g": number, "carbs_g": number, "fat_g": number, "fiber_g": number|null, "sodium_mg": number|null}]}',
+    '{"found": boolean, "source_url": string|null, "question": string|null, "options": [{"label": string, "serving_g": number|null, "serving_desc": string|null, "calories_kcal": number, "protein_g": number, "carbs_g": number, "fat_g": number, "fiber_g": number|null, "sodium_mg": number|null, "salt_g": number|null}]}',
   ]
     .filter(Boolean)
     .join('\n')
