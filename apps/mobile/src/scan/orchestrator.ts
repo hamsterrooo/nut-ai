@@ -189,6 +189,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
   setPhase({ kind: 'analyzing', photoUri, stage: 'matching' })
 
   let result: ScanResult | null = null
+  let pipelineError = ''
   try {
     const nutritionDb = await openNutritionDb()
     const foodDb = await loadFoodDb(nutritionDb)
@@ -203,15 +204,20 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
       },
       foodDb,
     )
-  } catch {
+  } catch (e) {
     result = null
+    const raw = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+    pipelineError = raw.replace(/\s+/g, ' ').slice(0, 400)
+    console.warn('[scan] pipeline failed', e)
   }
 
   if (!result) {
     setPhase({
       kind: 'failed',
       photoUri,
-      message: 'Model odpowiedział w formie, której nie dało się użyć. To nasza wina, spróbuj jeszcze raz.',
+      message:
+        'Model odpowiedział w formie, której nie dało się użyć. To nasza wina, spróbuj jeszcze raz.' +
+        (pipelineError ? `\n\nSzczegóły: ${pipelineError}` : ''),
       canRetry: true,
       failureKind: 'schema-violation',
     })

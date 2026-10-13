@@ -101,6 +101,20 @@ export interface ScanRequest {
 
 const DEFAULT_TIMEOUT_MS = 45_000
 
+/** Short, human-readable reason pulled from a provider error body (diagnostics only). */
+function errorDetail(body: string): string {
+  let msg = ''
+  try {
+    const j = JSON.parse(body)
+    const m = j?.error?.message ?? j?.message
+    if (typeof m === 'string') msg = m
+  } catch {
+    msg = body
+  }
+  msg = msg.replace(/\s+/g, ' ').trim()
+  return msg.length > 300 ? `${msg.slice(0, 300)}...` : msg
+}
+
 function classify(status: number, body: string): ScanFailure {
   // A publik envelope names its own state and its one link; it runs before
   // the status switch so a 402 keeps the link and a 401 keeps `reprovision`.
@@ -113,7 +127,7 @@ function classify(status: number, body: string): ScanFailure {
     return { kind: 'quota-exhausted', message: 'Na koncie u dostawcy skończył się kredyt.', retryable: false, httpStatus: status }
   }
   if (status === 404) {
-    return { kind: 'model-unavailable', message: 'Ten model nie jest dostępny na Twoim koncie.', retryable: false, httpStatus: status }
+    return { kind: 'model-unavailable', message: `Ten model nie jest dostępny na Twoim koncie. ${errorDetail(body)}`.trim(), retryable: false, httpStatus: status }
   }
   if (status === 429) {
     return { kind: 'error-retryable', message: 'Dostawca ogranicza liczbę zapytań. Spróbuj za chwilę.', retryable: true, httpStatus: status }
@@ -124,7 +138,7 @@ function classify(status: number, body: string): ScanFailure {
   if (/refus|safety|policy/i.test(body)) {
     return { kind: 'content-refusal', message: 'Dostawca odmówił analizy tego zdjęcia.', retryable: false, httpStatus: status }
   }
-  return { kind: 'error-retryable', message: `Unexpected response (${status}).`, retryable: true, httpStatus: status }
+  return { kind: 'error-retryable', message: `Nieoczekiwana odpowiedź dostawcy (${status}). ${errorDetail(body)}`.trim(), retryable: true, httpStatus: status }
 }
 
 /** Pull the JSON payload out of each provider's differently-shaped envelope. */
