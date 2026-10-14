@@ -164,41 +164,8 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Page 3 — activity and water */}
+        {/* Page 3 — water */}
         <View style={{ width, paddingHorizontal: space.lg }}>
-          <View style={{ flexDirection: 'row', gap: space.md }}>
-            <View style={[styles.card, { flex: 1, backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
-              <Text style={[type.caption, { color: theme.textMuted }]}>Kroki</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                <Text style={[styles.mid, { color: theme.text }]}>—</Text>
-                <Text style={[type.caption, { color: theme.textFaint }]}>/10 000</Text>
-              </View>
-              <View style={{ alignItems: 'center', marginTop: space.md }}>
-                <Ring pct={0} over={false} size={92} stroke={9}>
-                  <Icon name="steps" size={22} color={theme.textMuted} />
-                </Ring>
-              </View>
-              <Text style={[type.micro, { color: theme.textFaint, marginTop: space.sm }]}>
-                Wymaga Apple Zdrowie
-              </Text>
-            </View>
-
-            <View style={[styles.card, { flex: 1, backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
-              <Text style={[type.caption, { color: theme.textMuted }]}>Spalone kalorie</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                <Text style={[styles.mid, { color: theme.text }]}>—</Text>
-                <Text style={[type.caption, { color: theme.textFaint }]}>kcal</Text>
-              </View>
-              <Pressable
-                onPress={() => router.push('/log-exercise' as never)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.lg }}
-              >
-                <Icon name="dumbbell" size={18} color={theme.protein} />
-                <Text style={[type.label, { color: theme.protein }]}>Dodaj trening</Text>
-              </Pressable>
-            </View>
-          </View>
-
           <View style={[styles.card, { backgroundColor: theme.bgElevated, borderColor: theme.border, marginTop: space.md }]}>
             <View style={styles.spread}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>

@@ -4,6 +4,7 @@ import {
   LabelPayloadZ,
   ReceiptPayloadZ,
   VISION_WIRE_SCHEMA,
+  VisionPayloadZ,
   WebLookupResultZ,
   type IngredientRow,
   type LoggedMeal,
@@ -209,6 +210,22 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     const raw = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
     pipelineError = raw.replace(/\s+/g, ' ').slice(0, 400)
     console.warn('[scan] pipeline failed', e)
+  }
+
+  if (!result && !pipelineError) {
+    // runPipeline returns null (no throw) when the model's JSON fails the
+    // VisionPayloadZ check. Re-run the check here to surface the reason.
+    const check = VisionPayloadZ.safeParse(outcome.value.raw)
+    if (!check.success) {
+      pipelineError = check.error.issues
+        .slice(0, 3)
+        .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+        .join('; ')
+        .slice(0, 400)
+    } else {
+      pipelineError = 'Walidacja schematu przeszła, ale pipeline zwrócił pusty wynik.'
+    }
+    console.warn('[scan] schema violation', JSON.stringify(outcome.value.raw)?.slice(0, 2000))
   }
 
   if (!result) {

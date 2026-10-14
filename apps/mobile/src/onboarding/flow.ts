@@ -29,7 +29,6 @@ export const FLOW = [
   // leave the device.
   'provider',
   'apikey',
-  'health',
   'thanks',
   'notifications',
   'generate',

@@ -119,11 +119,6 @@ open ios/NutAI.xcworkspace              # then: pick your phone, press Run (⌘R
 Xcode will ask you to pick a signing team the first time — your free Apple ID works (apps signed
 this way re-install every 7 days; a $99/yr developer account removes that limit).
 
-Apple does not grant a free Apple ID the HealthKit capability, so the build above ships without
-the optional "Health reconnect" step and app.config.ts's Health entitlement — the app runs exactly
-the same otherwise. If you have a paid Apple Developer Program membership, get HealthKit back with
-`SKIP_HEALTHKIT=0 npm run prebuild` before opening Xcode.
-
 **Android** (any computer with [Android Studio](https://developer.android.com/studio)'s SDK):
 
 ```bash
@@ -164,7 +159,7 @@ npm install
 npm run check        # lint + typecheck + tests + node-purity
 ```
 
-**Expo Go is not a supported development mode.** The camera, SQLite, Keychain key storage, HealthKit,
+**Expo Go is not a supported development mode.** The camera, SQLite, Keychain key storage
 and file export/import all require a compiled app — build with Xcode or `expo run:android` as shown
 above.
 

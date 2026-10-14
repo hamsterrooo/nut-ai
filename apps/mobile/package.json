@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@expo/ui": "~57.0.8",
-    "@kingstinct/react-native-healthkit": "^14.0.2",
     "@nutai/clamp": "*",
     "@nutai/confidence": "*",
     "@nutai/core-schema": "*",

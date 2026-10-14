@@ -49,8 +49,6 @@ jobs:
           grep -q "const BUNDLE_ID = '${BID}'" apps/mobile/app.config.ts
           echo "Bundle ID: ${BID}"
 
-      # HealthKit is OFF by default in app.config.ts (SKIP_HEALTHKIT != '0').
-      # Do not set SKIP_HEALTHKIT=0 here: a free Apple ID cannot sign it.
       - name: Generate native iOS project
         working-directory: apps/mobile
         run: npm run prebuild

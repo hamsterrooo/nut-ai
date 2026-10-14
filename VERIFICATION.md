@@ -147,7 +147,7 @@ Stated plainly so nothing here reads as more finished than it is.
 - Onboarding (12 screens), goals UI, key-entry screen
 - Trends / Foods / You are placeholder screens
 - Offline queue, barcode scanning UI, saved meals, custom foods
-- HealthKit, Health Connect, widgets (M6)
+- Widgets (M6)
 - Branded-foods tier and the five verified-open national tables (UK CoFID, Japan
   MEXT, France CIQUAL, Germany BLS, Australia FSANZ) — the pipeline is built and
   they are additive stages

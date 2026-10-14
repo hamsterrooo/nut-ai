@@ -5,7 +5,6 @@ import { Alert, Linking } from 'react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ProviderId } from '@nutai/prompt'
-import { availability, requestPermissions } from '../../src/health/healthkit'
 import { exportAndShareBackup, finishRestore, importBackup, pickBackupFile } from '../../src/data/backup'
 import { currentGoal, resetEverything, setting, type CurrentGoal } from '../../src/data/repo'
 import { loadCredential, maskCredential } from '../../src/inference/credentials'
@@ -35,8 +34,6 @@ export default function Profile() {
   const insets = useSafeAreaInsets()
 
   const [goal, setGoal] = useState<CurrentGoal | null>(null)
-  const [healthAvail, setHealthAvail] = useState<'available' | 'not-ios' | 'unavailable' | 'checking'>('checking')
-  const [healthBusy, setHealthBusy] = useState(false)
   const [diet, setDiet] = useState('')
   const [providerLabel, setProviderLabel] = useState('—')
   const [dataBusy, setDataBusy] = useState(false)
@@ -45,16 +42,14 @@ export default function Profile() {
     useCallback(() => {
       let alive = true
       void (async () => {
-        const [g, avail, d, p] = await Promise.all([
+        const [g, d, p] = await Promise.all([
           currentGoal(),
-          availability(),
           setting('diet.style', 'balanced'),
           setting('provider'),
         ])
         if (!alive) return
         setGoal(g)
         setDiet(d)
-        setHealthAvail(avail === 'available' ? 'available' : avail === 'not-ios' ? 'not-ios' : 'unavailable')
         if (!p || p === 'none') {
           setProviderLabel('Niepołączony')
         } else if (p === 'publik') {
@@ -85,25 +80,6 @@ export default function Profile() {
       }
     }, []),
   )
-
-  function connectHealth() {
-    if (healthBusy) return
-    setHealthBusy(true)
-    void (async () => {
-      const res = await requestPermissions()
-      setHealthBusy(false)
-      // iOS never reports whether READ access was granted — claiming success
-      // here would be a lie. Say what actually happened and point at Settings.
-      if (res.prompted) {
-        Alert.alert('Gotowe', 'Jeśli zezwolono na dostęp, kroki i treningi pojawią się po synchronizacji.')
-      } else {
-        Alert.alert(
-          'Zdrowie nie odpowiedziało',
-          'Zarządzaj dostępem w Ustawieniach → Prywatność i ochrona → Zdrowie albo przyciskiem poniżej.',
-        )
-      }
-    })()
-  }
 
   function exportData() {
     if (dataBusy) return
@@ -201,25 +177,6 @@ export default function Profile() {
 
       <Section title="Dostawca AI">
         <Row label="Dostawca i klucz" value={providerLabel} onPress={() => router.push('/provider-settings' as never)} />
-      </Section>
-
-      <Section title="Apple Zdrowie">
-        {healthAvail === 'available' ? (
-          <>
-            <Row
-              label={healthBusy ? 'Łączenie…' : 'Połącz / połącz ponownie'}
-              value=""
-              onPress={connectHealth}
-            />
-            <Pressable onPress={() => void Linking.openSettings()} style={{ padding: space.lg, paddingTop: 0 }}>
-              <Text style={[type.caption, { color: theme.textMuted }]}>
-                Już odpowiedziano na prośbę o dostęp? <Text style={{ color: theme.protein }}>Zarządzaj dostępem w Ustawieniach</Text>
-              </Text>
-            </Pressable>
-          </>
-        ) : (
-          <Row label="Apple Zdrowie" value={healthAvail === 'not-ios' ? 'Tylko iOS' : 'Niedostępne na tym urządzeniu'} />
-        )}
       </Section>
 
       <Section title="Twoje dane">

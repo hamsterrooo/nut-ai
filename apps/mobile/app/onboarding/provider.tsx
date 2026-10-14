@@ -64,7 +64,7 @@ export default function ProviderScreen() {
       ctaDisabled={a.provider === undefined}
       onCta={() => {
         if (a.provider === 'none') void putSetting('provider', 'none')
-        router.push((a.provider === 'none' ? '/onboarding/health' : nextRoute('provider')) as never)
+        router.push((a.provider === 'none' ? nextRoute('apikey') : nextRoute('provider')) as never)
       }}
       scroll
     >

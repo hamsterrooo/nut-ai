@@ -17,7 +17,7 @@ export interface VisionJsonInput {
 
 /**
  * Text-only sibling of buildVisionJsonRequest — same transport, no image.
- * Used by the exercise Describe path.
+ * Used by the web lookup path.
  */
 export function buildTextJsonRequest(
   provider: ProviderId,
@@ -72,23 +72,6 @@ export function buildTextJsonRequest(
     },
     promptVersion,
   }
-}
-
-export const EXERCISE_ESTIMATE_PROMPT_VERSION = 'exercise-estimate-v1'
-
-export function buildExerciseEstimateInstruction(description: string, weightKg: number | null): string {
-  return [
-    `Estimate the calories burned by this workout, described by the user: "${description.trim()}"`,
-    weightKg ? `The user weighs about ${Math.round(weightKg)} kg.` : 'Body weight unknown — assume 80 kg.',
-    '',
-    'Rules:',
-    '- Use standard MET values for the activity and intensity described. Be conservative: when the description is ambiguous, choose the LOWER plausible figure. People overestimate exercise burn, and an inflated number here corrupts their daily budget.',
-    '- duration_min from the description; null if none was given (and reflect that uncertainty by staying conservative).',
-    '- label: a short title for the log, e.g. "Leg strength training".',
-    '',
-    'Respond with ONLY this JSON object:',
-    '{"label": string, "duration_min": number|null, "calories_kcal": number}',
-  ].join('\n')
 }
 
 export function buildVisionJsonRequest(

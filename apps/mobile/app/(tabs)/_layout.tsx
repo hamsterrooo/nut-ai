@@ -33,7 +33,6 @@ interface Action {
 }
 
 const ACTIONS: Action[] = [
-  { label: 'Dodaj trening', icon: 'dumbbell', route: '/log-exercise' },
   { label: 'Zapisane produkty', icon: 'bookmark', route: '/saved-foods' },
   { label: 'Baza produktów', icon: 'search', route: '/food-search' },
   { label: 'Skanuj jedzenie', icon: 'scan', route: '/camera' },
