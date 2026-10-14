@@ -32,16 +32,22 @@ interface Action {
   route: string
 }
 
-const ACTIONS: Action[] = [
-  { label: 'Zapisane produkty', icon: 'bookmark', route: '/saved-foods' },
+/** The main action gets the wide tile on top; the rest share one row below it. */
+const PRIMARY_ACTION: Action = { label: 'Skanuj jedzenie', icon: 'scan', route: '/camera' }
+const SECONDARY_ACTIONS: Action[] = [
   { label: 'Baza produktów', icon: 'search', route: '/food-search' },
-  { label: 'Skanuj jedzenie', icon: 'scan', route: '/camera' },
+  { label: 'Zapisane produkty', icon: 'bookmark', route: '/saved-foods' },
 ]
 
 export default function TabLayout() {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const [sheetOpen, setSheetOpen] = useState(false)
+
+  function openAction(a: Action) {
+    setSheetOpen(false)
+    router.push(a.route as never)
+  }
 
   return (
     <>
@@ -90,20 +96,29 @@ export default function TabLayout() {
       <Modal visible={sheetOpen} transparent animationType="fade" onRequestClose={() => setSheetOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setSheetOpen(false)}>
           <View style={[styles.grid, { paddingBottom: Math.max(insets.bottom, space.md) + 90 }]}>
-            {ACTIONS.map((a) => (
-              <Pressable
-                key={a.label}
-                accessibilityRole="button"
-                onPress={() => {
-                  setSheetOpen(false)
-                  router.push(a.route as never)
-                }}
-                style={[styles.action, { backgroundColor: theme.bgElevated }]}
-              >
-                <Icon name={a.icon} size={28} color={theme.text} />
-                <Text style={[type.bodyStrong, { color: theme.text, marginTop: space.sm }]}>{a.label}</Text>
-              </Pressable>
-            ))}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openAction(PRIMARY_ACTION)}
+              style={[styles.actionWide, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}
+            >
+              <Icon name={PRIMARY_ACTION.icon} size={28} color={theme.text} />
+              <Text style={[type.bodyStrong, { color: theme.text }]}>{PRIMARY_ACTION.label}</Text>
+            </Pressable>
+            <View style={styles.row}>
+              {SECONDARY_ACTIONS.map((a) => (
+                <Pressable
+                  key={a.label}
+                  accessibilityRole="button"
+                  onPress={() => openAction(a)}
+                  style={[styles.action, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}
+                >
+                  <Icon name={a.icon} size={28} color={theme.text} />
+                  <Text style={[type.bodyStrong, { color: theme.text, marginTop: space.sm, textAlign: 'center' }]}>
+                    {a.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
 
           <View style={[styles.closeWrap, { paddingBottom: Math.max(insets.bottom, space.md) }]}>
@@ -155,17 +170,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: space.md,
     paddingHorizontal: space.lg,
   },
+  row: {
+    flexDirection: 'row',
+    gap: space.md,
+  },
   action: {
-    width: '47%',
+    flex: 1,
     aspectRatio: 1.35,
     borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: space.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionWide: {
+    flexDirection: 'row',
+    gap: space.md,
+    paddingVertical: space.xl,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
