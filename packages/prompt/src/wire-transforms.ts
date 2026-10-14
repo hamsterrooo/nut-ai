@@ -90,6 +90,12 @@ export function geminiWireSchema(base: Record<string, unknown>): Record<string, 
   walk(out, (n) => {
     stripKeys(n, BOUND_KEYS)
     delete n.additionalProperties
+    // Gemini's Schema has no `const` and the API rejects unknown field names.
+    // A one-element enum is the supported spelling of the same constraint.
+    if ('const' in n) {
+      n.enum = [n.const]
+      delete n.const
+    }
     if (Array.isArray(n.type)) {
       const types = n.type.filter((t) => t !== 'null')
       if (types.length !== n.type.length) n.nullable = true

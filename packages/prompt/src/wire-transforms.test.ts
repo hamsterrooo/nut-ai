@@ -97,6 +97,12 @@ describe('geminiWireSchema (OpenAPI subset)', () => {
       for (const b of BOUNDS) expect(n).not.toHaveProperty(b)
     }
   })
+
+  it('has no `const` (not in the Gemini Schema); a literal becomes a one-element enum', () => {
+    for (const n of nodes) expect(n).not.toHaveProperty('const')
+    const root = geminiWireSchema(VISION_WIRE_SCHEMA) as { properties: Record<string, { enum?: unknown[] }> }
+    expect(root.properties.schema_version?.enum).toEqual(['1.0.0'])
+  })
 })
 
 describe('web lookup requests', () => {

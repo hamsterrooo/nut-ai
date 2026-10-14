@@ -19,6 +19,7 @@ import {
   type ProviderId,
 } from '@nutai/prompt'
 import { recomputeAfterEdit, runPipeline, validatePayload, type ScanResult } from '@nutai/pipeline'
+import { stampSchemaVersion } from './stamp-schema-version'
 import { openNutritionDb } from '../db/expo-adapter'
 import { loadFoodDb } from '../db/portions'
 import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup, type ScanFailure } from '../inference/pathA/client'
@@ -189,13 +190,14 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
 
   setPhase({ kind: 'analyzing', photoUri, stage: 'matching' })
 
+  const rawPayload = stampSchemaVersion(outcome.value.raw)
   let result: ScanResult | null = null
   let pipelineError = ''
   try {
     const nutritionDb = await openNutritionDb()
     const foodDb = await loadFoodDb(nutritionDb)
     result = await runPipeline(
-      outcome.value.raw,
+      rawPayload,
       {
         db: nutritionDb,
         priors: EMPTY_PRIORS,
@@ -215,7 +217,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
   if (!result && !pipelineError) {
     // runPipeline returns null (no throw) when the model's JSON fails the
     // VisionPayloadZ check. Re-run the check here to surface the reason.
-    const check = VisionPayloadZ.safeParse(outcome.value.raw)
+    const check = VisionPayloadZ.safeParse(rawPayload)
     if (!check.success) {
       pipelineError = check.error.issues
         .slice(0, 3)
@@ -225,7 +227,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     } else {
       pipelineError = 'Walidacja schematu przeszła, ale pipeline zwrócił pusty wynik.'
     }
-    console.warn('[scan] schema violation', JSON.stringify(outcome.value.raw)?.slice(0, 2000))
+    console.warn('[scan] schema violation', JSON.stringify(rawPayload)?.slice(0, 2000))
   }
 
   if (!result) {
@@ -274,7 +276,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
   })
 
   // Fire-and-forget: refinement upgrades rows underneath the review screen.
-  void refineMisses(result, outcome.value.raw, r)
+  void refineMisses(result, rawPayload, r)
 }
 
 /** How many corpus misses we will pay to look up per scan. */
