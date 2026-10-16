@@ -62,6 +62,8 @@ export type ScanPhase =
       message: string
       canRetry: boolean
       failureKind?: ScanFailureKind | 'no-key'
+      /** Short copyable reason shown under the message: HTTP status, failure kind or SCHEMA. */
+      code?: string
       /** One link, when the failure has a next step (publik API's top_up_url). */
       action?: { label: string; url: string }
     }

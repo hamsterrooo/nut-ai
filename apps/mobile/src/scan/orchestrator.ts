@@ -85,6 +85,12 @@ async function preprocess(photoUri: string): Promise<string> {
 }
 
 /** The copy for "nothing to scan with", per feature. */
+/** The failure screen's copyable code: the HTTP status when there is one, else the failure kind. */
+function codeProp(err: ScanFailure | undefined): { code: string } | Record<string, never> {
+  if (!err) return {}
+  return { code: err.httpStatus ? String(err.httpStatus) : err.kind }
+}
+
 function resolveFailureCopy(err: ResolveFailure, feature: 'scan' | 'label' | 'receipt'): { message: string; failureKind: 'no-key' | 'key-invalid' } {
   if (err.kind === 'key-missing') return { message: 'Brak zapisanego klucza. Wpisz go ponownie w Profilu.', failureKind: 'key-invalid' }
   if (err.kind === 'publik-disconnected') return { message: DISCONNECTED_MESSAGE, failureKind: 'no-key' }
@@ -182,6 +188,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
       message: failureMessage(outcome.error, r),
       canRetry: outcome.error.retryable,
       failureKind: outcome.error.kind,
+      ...codeProp(outcome.error),
       ...(outcome.error.action ? { action: outcome.error.action } : {}),
     })
     return
@@ -239,6 +246,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
         (pipelineError ? `\n\nSzczegóły: ${pipelineError}` : ''),
       canRetry: true,
       failureKind: 'schema-violation',
+      code: 'SCHEMA',
     })
     return
   }
@@ -515,6 +523,18 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   if (lookup.wallet) void notePublikWallet(lookup.wallet)
   const parsed = lookup.ok ? WebLookupResultZ.safeParse(lookup.raw) : null
   const opt = parsed?.success && parsed.data.found ? parsed.data.options[0] : undefined
+  if (!lookup.ok && lookup.error) {
+    // The call itself failed (limit, model, network): say so, not "not found".
+    setPhase({
+      kind: 'failed',
+      photoUri: '',
+      message: failureMessage(lookup.error, r),
+      canRetry: lookup.error.retryable,
+      failureKind: lookup.error.kind,
+      ...codeProp(lookup.error),
+    })
+    return
+  }
   if (!opt) {
     setPhase({
       kind: 'failed',
@@ -593,6 +613,7 @@ export async function startLabelScan(photoUri: string): Promise<void> {
       message: outcome.error ? failureMessage(outcome.error, r) : 'Nie udało się odczytać etykiety.',
       canRetry: outcome.error?.retryable ?? false,
       failureKind: outcome.error?.kind,
+      ...codeProp(outcome.error),
       ...(outcome.error?.action ? { action: outcome.error.action } : {}),
     })
     return
@@ -691,6 +712,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
       message: outcome.error ? failureMessage(outcome.error, r) : 'Nie udało się odczytać paragonu.',
       canRetry: outcome.error?.retryable ?? false,
       failureKind: outcome.error?.kind,
+      ...codeProp(outcome.error),
       ...(outcome.error?.action ? { action: outcome.error.action } : {}),
     })
     return

@@ -9,14 +9,13 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { WebLookupResult } from '@nutai/core-schema'
 import { healthScore } from '@nutai/totals'
-import { ConfidenceChip, ConfidenceReasons } from '../src/components/ConfidenceChip'
-import { Icon, type IconName } from '../src/components/Icon'
+import { Icon } from '../src/components/Icon'
+import { NutrientCard } from '../src/components/NutrientCard'
 import { logMeal } from '../src/data/repo'
 import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
 import {
@@ -48,7 +47,6 @@ export default function Result() {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const phase = useScan()
-  const [expandedBand, setExpandedBand] = useState(false)
   const [logging, setLogging] = useState(false)
   const [fixOpen, setFixOpen] = useState(false)
   const [fixText, setFixText] = useState('')
@@ -86,6 +84,11 @@ export default function Result() {
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, textAlign: 'center', lineHeight: 19 }]}>
           {phase.message}
         </Text>
+        {phase.code ? (
+          <Text selectable style={[type.micro, { color: theme.textFaint, marginTop: space.sm, textAlign: 'center' }]}>
+            Kod: {phase.code}
+          </Text>
+        ) : null}
         {/* The one link a failure may carry (publik API's top_up_url). The URL
             was origin-checked when the failure was classified, never here. */}
         {phase.action ? (
@@ -137,26 +140,23 @@ export default function Result() {
           {result.items[0]?.row.displayName ?? 'Twój posiłek'}
         </Text>
 
-        {/* The point estimate leads. The band qualifies it — it never replaces it. */}
-        <View style={{ marginTop: space.lg }}>
-          <Text style={[type.hero, { color: theme.text }]}>{result.totals.kcal}</Text>
-          <Text style={[type.caption, { color: theme.textMuted, marginTop: -space.xs }]}>kcal</Text>
-
-          <View style={{ marginTop: space.md }}>
-            <ConfidenceChip
-              value={result.totals.kcal}
-              band={result.mealBand}
-              expanded={expandedBand}
-              onPress={() => setExpandedBand((v) => !v)}
-            />
-            {expandedBand && <ConfidenceReasons band={result.mealBand} />}
-          </View>
+        <View style={{ marginTop: space.xl }}>
+          <NutrientCard
+            rows={[
+              { key: 'kcal', label: 'Kalorie', icon: 'flame', color: theme.text, value: result.totals.kcal, unit: 'kcal' },
+              { key: 'protein', label: 'Białko', icon: 'protein', color: theme.protein, value: result.totals.protein_g, unit: 'g' },
+              { key: 'carbs', label: 'Węglowodany', icon: 'carbs', color: theme.carbs, value: result.totals.carbs_g, unit: 'g' },
+              { key: 'fat', label: 'Tłuszcz', icon: 'fat', color: theme.fat, value: result.totals.fat_g, unit: 'g' },
+              { key: 'fiber', label: 'Błonnik', icon: 'fiber', color: '#8B7BD8', value: result.totals.fiber_g, unit: 'g' },
+              { key: 'sugar', label: 'Cukry', icon: 'sugar', color: '#E88BA8', value: result.totals.sugar_g, unit: 'g' },
+              { key: 'sodium', label: 'Sód', icon: 'sodium', color: '#D6A648', value: result.totals.sodium_mg, unit: 'mg' },
+            ]}
+          />
+          <HealthScoreCard
+            totals={result.totals}
+            grams={result.meal.ingredients.reduce((a, r) => a + r.grams, 0)}
+          />
         </View>
-
-        <StatsPager
-          totals={result.totals}
-          grams={result.meal.ingredients.reduce((a, r) => a + r.grams, 0)}
-        />
 
         {/* Highlighted questions: at most two, ever. */}
         {highlighted.map((q) => (
@@ -207,16 +207,18 @@ export default function Result() {
                   ) : row.isEstimate ? (
                     <Text style={[type.micro, { color: theme.uncertain, marginTop: 2 }]}>SZACUNEK AI</Text>
                   ) : null}
-                  {item && <ConfidenceChip value={(row.nutrientSnapshot.kcal * row.grams) / 100} band={item.band} />}
                 </View>
 
-                <TextInput
-                  accessibilityLabel={`Masa w gramach: ${row.displayName}`}
-                  keyboardType="numeric"
-                  defaultValue={String(Math.round(row.grams))}
-                  onChangeText={(t) => editGrams(row.id, Number(t.replace(',', '.')))}
-                  style={[styles.gramInput, { color: theme.text, borderColor: theme.border }]}
-                />
+                <View style={[styles.gramBox, { borderColor: theme.border }]}>
+                  <TextInput
+                    accessibilityLabel={`Masa w gramach: ${row.displayName}`}
+                    keyboardType="numeric"
+                    defaultValue={String(Math.round(row.grams))}
+                    onChangeText={(t) => editGrams(row.id, Number(t.replace(',', '.')))}
+                    style={[styles.gramInput, { color: theme.text }]}
+                  />
+                  <Text style={[type.caption, { color: theme.textMuted }]}>g</Text>
+                </View>
 
                 <Pressable
                   accessibilityRole="button"
@@ -419,119 +421,43 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
   )
 }
 
-function Macro({
-  label,
-  value,
-  unit = 'g',
-  color,
-  icon,
-}: {
-  label: string
-  value: number
-  unit?: string
-  color: string
-  icon: IconName
-}) {
-  const theme = useTheme()
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
-        <Text style={[type.heading, { color: theme.text }]}>{Math.round(value)}</Text>
-        <Text style={[type.caption, { color: theme.textFaint }]}>{unit}</Text>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: 2 }}>
-        <Icon name={icon} size={14} color={color} />
-        <Text style={[type.caption, { color: theme.textMuted }]}>{label}</Text>
-      </View>
-    </View>
-  )
-}
-
 /**
- * Two stat pages, swipeable like the incumbent's: macros, then
- * fiber/sugar/sodium with the health score. The score is arithmetic from
- * @nutai/totals — tap it and every point shows its named rule.
+ * The score is arithmetic from @nutai/totals: tap it and every point shows its
+ * named rule. Hidden when there is nothing to score.
  */
-function StatsPager({ totals, grams }: { totals: Parameters<typeof healthScore>[0]; grams: number }) {
+function HealthScoreCard({ totals, grams }: { totals: Parameters<typeof healthScore>[0]; grams: number }) {
   const theme = useTheme()
-  const { width } = useWindowDimensions()
-  const pageW = width - space.lg * 2
-  const [page, setPage] = useState(0)
   const [showWhy, setShowWhy] = useState(false)
   const hs = healthScore(totals, grams > 0 ? grams : undefined)
+  if (!hs) return null
 
   return (
-    <View style={{ marginTop: space.xl }}>
-      <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / pageW))}
-      >
-        <View style={[styles.statsPage, { width: pageW }]}>
-          <Macro label="Białko" value={totals.protein_g} color={theme.protein} icon="protein" />
-          <Macro label="Węglowodany" value={totals.carbs_g} color={theme.carbs} icon="carbs" />
-          <Macro label="Tłuszcz" value={totals.fat_g} color={theme.fat} icon="fat" />
-        </View>
-
-        <View style={{ width: pageW }}>
-          <View style={styles.statsPage}>
-            <Macro label="Błonnik" value={totals.fiber_g} color={theme.carbs} icon="fiber" />
-            <Macro label="Cukry" value={totals.sugar_g} color={theme.uncertain} icon="sugar" />
-            <Macro label="Sód" value={totals.sodium_mg} unit="mg" color={theme.fat} icon="sodium" />
-          </View>
-
-          {hs ? (
-            <Pressable
-              onPress={() => setShowWhy((v) => !v)}
-              style={[styles.healthCard, { backgroundColor: theme.bgSunken }]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-                <Icon name="heart" size={18} color={theme.protein} />
-                <Text style={[type.bodyStrong, { color: theme.text, flex: 1 }]}>Ocena zdrowotności</Text>
-                <Text style={[type.bodyStrong, { color: theme.text }]}>{hs.score}/10</Text>
-              </View>
-              <View style={[styles.healthTrack, { backgroundColor: theme.bgElevated }]}>
-                <View
-                  style={[
-                    styles.healthFill,
-                    { width: `${hs.score * 10}%` as const, backgroundColor: theme.affirm },
-                  ]}
-                />
-              </View>
-              {showWhy &&
-                hs.reasons.map((r) => (
-                  <Text key={r} style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
-                    · {r}
-                  </Text>
-                ))}
-              {showWhy && (
-                <Text style={[type.micro, { color: theme.textFaint, marginTop: space.sm }]}>
-                  Obliczone stałymi regułami z tych sum, nigdy przez AI.
-                </Text>
-              )}
-            </Pressable>
-          ) : null}
-        </View>
-      </ScrollView>
-
-      <View style={styles.dots}>
-        {[0, 1].map((i) => (
-          <View
-            key={i}
-            style={[styles.dot, { backgroundColor: i === page ? theme.text : theme.border }]}
-          />
-        ))}
+    <Pressable onPress={() => setShowWhy((v) => !v)} style={[styles.healthCard, { backgroundColor: theme.bgSunken }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Icon name="heart" size={18} color={theme.protein} />
+        <Text style={[type.bodyStrong, { color: theme.text, flex: 1 }]}>Ocena zdrowotności</Text>
+        <Text style={[type.bodyStrong, { color: theme.text }]}>{hs.score}/10</Text>
       </View>
-    </View>
+      <View style={[styles.healthTrack, { backgroundColor: theme.bgElevated }]}>
+        <View style={[styles.healthFill, { width: `${hs.score * 10}%` as const, backgroundColor: theme.affirm }]} />
+      </View>
+      {showWhy &&
+        hs.reasons.map((r) => (
+          <Text key={r} style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+            · {r}
+          </Text>
+        ))}
+      {showWhy && (
+        <Text style={[type.micro, { color: theme.textFaint, marginTop: space.sm }]}>
+          Obliczone stałymi regułami z tych sum, nigdy przez AI.
+        </Text>
+      )}
+    </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl },
-  statsPage: { flexDirection: 'row', gap: space.md },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: space.md },
-  dot: { width: 6, height: 6, borderRadius: 3 },
   healthCard: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },
   healthTrack: { height: 6, borderRadius: 3, marginTop: space.md, overflow: 'hidden' },
   healthFill: { height: 6, borderRadius: 3 },
@@ -573,14 +499,20 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  gramInput: {
-    width: 64,
-    textAlign: 'right',
-    paddingVertical: space.sm,
-    paddingHorizontal: space.sm,
+  gramBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingRight: space.md,
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: MIN_TAP_TARGET,
+  },
+  gramInput: {
+    width: 56,
+    textAlign: 'right',
+    paddingVertical: space.sm,
+    paddingHorizontal: space.sm,
   },
   photo: { width: 160, height: 160, borderRadius: radius.lg },
   lookupQuiet: {

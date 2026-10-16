@@ -190,6 +190,9 @@ export interface DayTotals {
   protein_g: number
   fat_g: number
   carbs_g: number
+  fiber_g: number
+  sugar_g: number
+  sodium_mg: number
   mealCount: number
   distinctSlots: number
   pendingCount: number
@@ -209,6 +212,9 @@ export async function dayTotals(date: string): Promise<DayTotals> {
     p: number | null
     f: number | null
     c: number | null
+    fi: number | null
+    su: number | null
+    so: number | null
     meals: number | null
     slots: number | null
   }>(
@@ -217,6 +223,9 @@ export async function dayTotals(date: string): Promise<DayTotals> {
        SUM(li.snap_protein_g   * li.grams / 100.0 * m.portion_eaten_fraction) AS p,
        SUM(li.snap_fat_g       * li.grams / 100.0 * m.portion_eaten_fraction) AS f,
        SUM(li.snap_carb_g      * li.grams / 100.0 * m.portion_eaten_fraction) AS c,
+       SUM(li.snap_fiber_g     * li.grams / 100.0 * m.portion_eaten_fraction) AS fi,
+       SUM(li.snap_sugar_g     * li.grams / 100.0 * m.portion_eaten_fraction) AS su,
+       SUM(li.snap_sodium_mg   * li.grams / 100.0 * m.portion_eaten_fraction) AS so,
        COUNT(DISTINCT m.id)        AS meals,
        COUNT(DISTINCT m.meal_slot) AS slots
      FROM meals m
@@ -236,6 +245,11 @@ export async function dayTotals(date: string): Promise<DayTotals> {
     protein_g: row?.p ?? 0,
     fat_g: row?.f ?? 0,
     carbs_g: row?.c ?? 0,
+    // SUM ignores NULL snapshots, so an item without fiber/sugar/sodium data
+    // counts as unknown rather than as zero of something else.
+    fiber_g: row?.fi ?? 0,
+    sugar_g: row?.su ?? 0,
+    sodium_mg: row?.so ?? 0,
     mealCount: row?.meals ?? 0,
     distinctSlots: row?.slots ?? 0,
     // Pending scans contribute ZERO calories. A number that silently grows later

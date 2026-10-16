@@ -12,8 +12,8 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Svg, { Circle } from 'react-native-svg'
-import { Icon, type IconName } from '../../src/components/Icon'
+import { Icon } from '../../src/components/Icon'
+import { NutrientCard } from '../../src/components/NutrientCard'
 import {
   currentGoal,
   dayTotals,
@@ -82,9 +82,6 @@ export default function Home() {
     )
   }
 
-  const remaining = goal.targetKcal - totals.kcal
-  const over = remaining < 0
-  const pct = goal.targetKcal > 0 ? totals.kcal / goal.targetKcal : 0
   const empty = totals.mealCount === 0 && totals.pendingCount === 0
   return (
     <ScrollView
@@ -119,52 +116,23 @@ export default function Home() {
         }
         style={{ marginTop: space.md }}
       >
-        {/* Page 1 — calories and the three macros */}
+        {/* Page 1 — every tracked value on one card, all with the same weight.
+            Fiber, sugar and sodium targets are fixed defaults for now. */}
         <View style={{ width, paddingHorizontal: space.lg }}>
-          <View style={[styles.heroCard, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.hero, { color: theme.text }]}>
-                {Math.abs(Math.round(remaining))}
-              </Text>
-              <Text style={[type.body, { color: theme.textMuted }]}>
-                {over ? 'Kalorie ponad cel' : 'Pozostało kalorii'}
-              </Text>
-            </View>
-            <Ring pct={pct} over={over} size={128} stroke={12}>
-              <Icon name="flame" size={26} color={theme.text} />
-            </Ring>
-          </View>
-
-          <View style={styles.macroRow}>
-            <MacroCard label="Białko" icon="protein" eaten={totals.protein_g} target={goal.protein_g} color={theme.protein} />
-            <MacroCard label="Węglowodany" icon="carbs" eaten={totals.carbs_g} target={goal.carbs_g} color={theme.carbs} />
-            <MacroCard label="Tłuszcz" icon="fat" eaten={totals.fat_g} target={goal.fat_g} color={theme.fat} />
-          </View>
+          <NutrientCard
+            rows={[
+              { key: 'kcal', label: 'Kalorie', icon: 'flame', color: theme.text, value: totals.kcal, unit: 'kcal', target: goal.targetKcal, limit: true },
+              { key: 'protein', label: 'Białko', icon: 'protein', color: theme.protein, value: totals.protein_g, unit: 'g', target: goal.protein_g },
+              { key: 'carbs', label: 'Węglowodany', icon: 'carbs', color: theme.carbs, value: totals.carbs_g, unit: 'g', target: goal.carbs_g },
+              { key: 'fat', label: 'Tłuszcz', icon: 'fat', color: theme.fat, value: totals.fat_g, unit: 'g', target: goal.fat_g },
+              { key: 'fiber', label: 'Błonnik', icon: 'fiber', color: '#8B7BD8', value: totals.fiber_g, unit: 'g', target: 30 },
+              { key: 'sugar', label: 'Cukry', icon: 'sugar', color: '#E88BA8', value: totals.sugar_g, unit: 'g', target: 50, limit: true },
+              { key: 'sodium', label: 'Sód', icon: 'sodium', color: '#D6A648', value: totals.sodium_mg, unit: 'mg', target: 2300, limit: true },
+            ]}
+          />
         </View>
 
-        {/* Page 2 — micros and the health score */}
-        <View style={{ width, paddingHorizontal: space.lg }}>
-          <View style={styles.macroRow}>
-            <MacroCard label="Błonnik" icon="fiber" eaten={0} target={30} color="#8B7BD8" unit="g" />
-            <MacroCard label="Cukry" icon="sugar" eaten={0} target={50} color="#E88BA8" unit="g" />
-            <MacroCard label="Sód" icon="sodium" eaten={0} target={2300} color="#D6A648" unit="mg" />
-          </View>
-
-          <View style={[styles.card, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
-            <View style={styles.spread}>
-              <Text style={[type.heading, { color: theme.text }]}>Ocena zdrowotności</Text>
-              <Text style={[type.heading, { color: theme.textMuted }]}>brak</Text>
-            </View>
-            <View style={[styles.scoreTrack, { backgroundColor: theme.ringTrack }]} />
-            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 19 }]}>
-              Zapisz kilka produktów, aby wygenerować dzisiejszą ocenę. W odróżnieniu od aplikacji,
-              którą zastępujemy, wzór jest opublikowany i czytelny: to arytmetyka na tym, co
-              zapisano, a nie nieprzejrzysta liczba „AI”.
-            </Text>
-          </View>
-        </View>
-
-        {/* Page 3 — water */}
+        {/* Page 2 — water */}
         <View style={{ width, paddingHorizontal: space.lg }}>
           <View style={[styles.card, { backgroundColor: theme.bgElevated, borderColor: theme.border, marginTop: space.md }]}>
             <View style={styles.spread}>
@@ -185,7 +153,7 @@ export default function Home() {
 
       {/* Page dots */}
       <View style={styles.dots}>
-        {[0, 1, 2].map((i) => (
+        {[0, 1].map((i) => (
           <View
             key={i}
             style={[styles.dot, { backgroundColor: i === page ? theme.text : theme.border }]}
@@ -298,94 +266,6 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
   )
 }
 
-function Ring({
-  pct, over, size, stroke, children,
-}: {
-  pct: number
-  over: boolean
-  size: number
-  stroke: number
-  children?: React.ReactNode
-}) {
-  const theme = useTheme()
-  const r = size / 2 - stroke
-  const c = 2 * Math.PI * r
-  const primary = Math.min(1, pct)
-  const overflow = over ? Math.min(1, pct - 1) : 0
-  const innerR = r - stroke - 3
-  const innerC = 2 * Math.PI * innerR
-
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={theme.ringTrack} strokeWidth={stroke} fill="none" />
-        <Circle
-          cx={size / 2} cy={size / 2} r={r}
-          stroke={theme.ring} strokeWidth={stroke} fill="none"
-          strokeDasharray={`${c * primary} ${c}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-        {overflow > 0 ? (
-          <Circle
-            cx={size / 2} cy={size / 2} r={innerR}
-            stroke={theme.uncertain} strokeWidth={stroke * 0.6} fill="none"
-            strokeDasharray={`${innerC * overflow} ${innerC}`}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          />
-        ) : null}
-      </Svg>
-      {children}
-    </View>
-  )
-}
-
-function MacroCard({
-  label, icon, eaten, target, color, unit = 'g',
-}: {
-  label: string
-  icon: IconName
-  eaten: number
-  target: number
-  color: string
-  unit?: string
-}) {
-  const theme = useTheme()
-  const left = Math.max(0, target - eaten)
-  const pct = target > 0 ? Math.min(1, eaten / target) : 0
-  const size = 74
-  const r = size / 2 - 5
-  const c = 2 * Math.PI * r
-
-  return (
-    <View style={[styles.macroCard, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
-      {/* "2300mg" must shrink, never wrap — a two-line number reads broken. */}
-      <Text style={[styles.macroNum, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
-        {Math.round(left)}
-        {unit}
-      </Text>
-      <Text style={[type.caption, { color: theme.textMuted }]}>Pozostało: {label.toLowerCase()}</Text>
-
-      <View style={{ alignItems: 'center', marginTop: space.md }}>
-        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-          <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-            <Circle cx={size / 2} cy={size / 2} r={r} stroke={theme.ringTrack} strokeWidth={5} fill="none" />
-            <Circle
-              cx={size / 2} cy={size / 2} r={r}
-              stroke={color} strokeWidth={5} fill="none"
-              strokeDasharray={`${c * pct} ${c}`}
-              strokeLinecap="round"
-              transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            />
-          </Svg>
-          <Icon name={icon} size={22} color={color} />
-        </View>
-      </View>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
@@ -409,23 +289,7 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: radius.pill, borderWidth: 1.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  heroCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: space.xl,
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  hero: { fontSize: 46, fontWeight: '800', letterSpacing: -1.8 },
   mid: { fontSize: 26, fontWeight: '800', letterSpacing: -0.8 },
-  macroRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
-  macroCard: {
-    flex: 1,
-    padding: space.md,
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  macroNum: { fontSize: 22, fontWeight: '800', letterSpacing: -0.6 },
   card: { padding: space.lg, borderRadius: radius.xl, borderWidth: StyleSheet.hairlineWidth },
   spread: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   scoreTrack: { height: 8, borderRadius: 4, marginTop: space.md },
