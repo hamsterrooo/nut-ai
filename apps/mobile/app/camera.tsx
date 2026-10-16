@@ -11,6 +11,11 @@ import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
 type CameraMode = 'food' | 'barcode' | 'label' | 'receipt'
 
+const SHORTCUTS: Array<{ label: string; short: string; icon: IconName; route: string }> = [
+  { label: 'Baza produktów', short: 'Baza', icon: 'search', route: '/food-search' },
+  { label: 'Zapisane produkty', short: 'Zapisane', icon: 'bookmark', route: '/saved-foods' },
+]
+
 const MODES: Array<{ id: CameraMode; label: string; icon: IconName }> = [
   { id: 'food', label: 'Skanuj jedzenie', icon: 'scan' },
   { id: 'barcode', label: 'Kod kreskowy', icon: 'barcode' },
@@ -150,6 +155,21 @@ export default function Camera() {
       >
         <Text style={{ color: '#fff', fontSize: 22 }}>×</Text>
       </Pressable>
+
+      <View style={[styles.shortcuts, { top: insets.top + space.md }]}>
+        {SHORTCUTS.map((s) => (
+          <Pressable
+            key={s.route}
+            accessibilityRole="button"
+            accessibilityLabel={s.label}
+            onPress={() => router.replace(s.route as never)}
+            style={styles.shortcut}
+          >
+            <Icon name={s.icon} size={16} color="#fff" />
+            <Text style={[type.label, { color: '#fff' }]}>{s.short}</Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   )
 }
@@ -193,6 +213,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderWidth: 4,
     borderColor: 'rgba(255,255,255,0.4)',
+  },
+  shortcuts: { position: 'absolute', right: space.lg, flexDirection: 'row', gap: space.sm },
+  shortcut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    height: MIN_TAP_TARGET,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   close: {
     position: 'absolute',

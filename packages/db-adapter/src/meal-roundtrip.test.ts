@@ -99,3 +99,48 @@ describe('meal round trip', () => {
     expect(spend!.usd).toBeCloseTo(0.0029, 6)
   })
 })
+
+// Same SQL as repo.ts mealsForDay / deleteMeal.
+const MEALS_FOR_DAY_SQL = `
+  SELECT m.id, m.analysis_status,
+    (SELECT group_concat(display_name, ', ')
+       FROM (SELECT display_name FROM log_items WHERE meal_id = m.id ORDER BY sort_order)) AS names,
+    COALESCE((SELECT SUM(snap_energy_kcal * grams / 100.0) FROM log_items WHERE meal_id = m.id), 0)
+      * m.portion_eaten_fraction AS kcal
+  FROM meals m
+  WHERE m.local_date = ? AND m.analysis_status IN ('complete','manual','captured','queued','analyzing')
+  ORDER BY m.logged_at DESC, m.id DESC`
+
+describe('meal list and deletion', () => {
+  it('lists meals with name and eaten kcal, pending ones with zero', async () => {
+    const a = await insertMeal('complete', 0.5)
+    await insertItem(a, 200, 100)
+    await insertMeal('analyzing')
+    await insertMeal('failed')
+    const rows = await db.all<{ id: number; analysis_status: string; names: string | null; kcal: number }>(
+      MEALS_FOR_DAY_SQL,
+      ['2026-08-01'],
+    )
+    expect(rows).toHaveLength(2)
+    const done = rows.find((r) => r.id === a)!
+    expect(done.names).toBe('Test food')
+    expect(done.kcal).toBeCloseTo(100, 6)
+    expect(rows.find((r) => r.analysis_status === 'analyzing')!.kcal).toBe(0)
+  })
+
+  it('deleting a meal removes its items and drops the day total', async () => {
+    const a = await insertMeal('complete')
+    await insertItem(a, 100, 100)
+    const b = await insertMeal('complete')
+    await insertItem(b, 300, 100)
+    await db.transaction(async (tx) => {
+      await tx.run('DELETE FROM log_items WHERE meal_id = ?', [a])
+      await tx.run('DELETE FROM meals WHERE id = ?', [a])
+    })
+    const row = await db.get<{ kcal: number; meals: number }>(DAY_TOTALS_SQL, ['2026-08-01'])
+    expect(row!.meals).toBe(1)
+    expect(row!.kcal).toBeCloseTo(300, 6)
+    const left = await db.get<{ c: number }>('SELECT COUNT(*) c FROM log_items WHERE meal_id = ?', [a])
+    expect(left!.c).toBe(0)
+  })
+})

@@ -1,17 +1,22 @@
 import { pluralPl } from '../i18n/format'
 import { migrate, type DbAdapter } from '@nutai/db-adapter'
 import {
+  computeCalorieTarget,
   computeMacros,
   computeTrend,
   isDayCompleteEnough,
+  LB_PER_KG,
   trendSlopeLbPerWeek,
   updateAdaptiveTdee,
+  type ActivityLevel,
+  type CalorieTarget,
   type Goal,
   type MacroTargets,
   type WeightPoint,
 } from '@nutai/goals'
 import Storage from 'expo-sqlite/kv-store'
 import { ONBOARDING_DONE_KEY } from '../onboarding/done-key'
+import { inferredGoal } from '../onboarding/store'
 import { EXPORT_TABLES, WIPE_ONLY_TABLES } from './backup-core'
 import { localDate, slotFor } from './date-utils'
 import { clearCredential } from '../inference/credentials'
@@ -181,6 +186,75 @@ export async function overrideTargets(
   )
 }
 
+export interface RecomputedGoal {
+  target: CalorieTarget
+  macros: MacroTargets
+  goalType: Goal
+  weightKg: number
+  heightCm: number
+}
+
+/**
+ * The plan onboarding would produce today: profile (sex, birth year, height,
+ * activity) plus the LATEST weigh-in and the desired weight saved earlier. Same
+ * rate rule as the plan screen. Returns null until there is a profile and a weight.
+ * Age is the calendar-year difference, so it can be a year high before the birthday.
+ */
+export async function recomputeGoalFromProfile(now: number): Promise<RecomputedGoal | null> {
+  const h = await db()
+  const p = await h.get<{
+    sex: string | null
+    birth_year: number | null
+    height_cm: number | null
+    activity_level: string | null
+  }>('SELECT sex, birth_year, height_cm, activity_level FROM user_profile WHERE id = 1')
+  const w = await h.get<{ weight_kg: number }>('SELECT weight_kg FROM weight_entries ORDER BY local_date DESC LIMIT 1')
+  if (!p || !w || p.height_cm == null) return null
+
+  const desiredRaw = Number.parseFloat(await setting('goal.desiredWeightKg', ''))
+  const desiredKg = Number.isFinite(desiredRaw) && desiredRaw > 0 ? desiredRaw : w.weight_kg
+  const goalType = inferredGoal({ weightKg: w.weight_kg, desiredWeightKg: desiredKg })
+  const deltaLb = Math.abs(desiredKg - w.weight_kg) * LB_PER_KG
+  const rate = goalType === 'maintain' ? 0 : Math.min(1, Math.max(0.25, deltaLb / 12))
+  const age = p.birth_year == null ? 30 : Math.max(13, Math.min(100, new Date(now).getFullYear() - p.birth_year))
+
+  const target = computeCalorieTarget({
+    sex: p.sex === 'male' || p.sex === 'female' ? p.sex : 'unspecified',
+    weightKg: w.weight_kg,
+    heightCm: p.height_cm,
+    ageYears: age,
+    activity: (p.activity_level ?? 'sedentary') as ActivityLevel,
+    goal: goalType,
+    rateLbPerWeek: rate,
+  })
+  const macros = computeMacros(target.target, w.weight_kg, goalType)
+  return { target, macros, goalType, weightKg: w.weight_kg, heightCm: p.height_cm }
+}
+
+/** Save a recomputed plan as a new goals row. Adaptive goals come back ON. */
+export async function applyRecomputedGoal(r: RecomputedGoal, now: number): Promise<void> {
+  const h = await db()
+  await h.run(
+    `INSERT INTO goals
+       (effective_from, goal_type, rate_lb_per_week, target_kcal, target_raw_kcal,
+        floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`,
+    [
+      now,
+      r.goalType,
+      null,
+      r.target.target,
+      r.target.targetRaw,
+      r.target.floorApplied ? 1 : 0,
+      r.macros.protein_g,
+      r.macros.fat_g,
+      r.macros.carbs_g,
+      r.target.bmr,
+      r.target.tdee,
+    ],
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Day totals
 // ---------------------------------------------------------------------------
@@ -261,6 +335,63 @@ export async function dayTotals(date: string): Promise<DayTotals> {
 // ---------------------------------------------------------------------------
 // Meals
 // ---------------------------------------------------------------------------
+
+export interface MealRow {
+  id: number
+  name: string
+  kcal: number
+  /** Local HH:MM. */
+  time: string
+  /** Still being analysed, so it contributes nothing to the totals yet. */
+  pending: boolean
+}
+
+/** Meals of one day for the Today list, newest first. */
+export async function mealsForDay(date: string): Promise<MealRow[]> {
+  const h = await db()
+  const rows = await h.all<{
+    id: number
+    logged_at: number
+    analysis_status: string
+    names: string | null
+    kcal: number | null
+  }>(
+    `SELECT m.id, m.logged_at, m.analysis_status,
+       (SELECT group_concat(display_name, ', ')
+          FROM (SELECT display_name FROM log_items WHERE meal_id = m.id ORDER BY sort_order)) AS names,
+       COALESCE((SELECT SUM(snap_energy_kcal * grams / 100.0) FROM log_items WHERE meal_id = m.id), 0)
+         * m.portion_eaten_fraction AS kcal
+     FROM meals m
+     WHERE m.local_date = ? AND m.analysis_status IN ('complete','manual','captured','queued','analyzing')
+     ORDER BY m.logged_at DESC, m.id DESC`,
+    [date],
+  )
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return rows.map((r) => {
+    const d = new Date(r.logged_at)
+    const done = r.analysis_status === 'complete' || r.analysis_status === 'manual'
+    return {
+      id: r.id,
+      name: r.names ?? 'Posiłek',
+      kcal: r.kcal ?? 0,
+      time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+      pending: !done,
+    }
+  })
+}
+
+/**
+ * Remove a meal and its ingredients. Day totals are derived from log_items on
+ * every read, so nothing else needs correcting. The cost ledger row stays: it is
+ * a record of tokens already spent, not of what was eaten.
+ */
+export async function deleteMeal(id: number): Promise<void> {
+  const h = await db()
+  await h.transaction(async (tx) => {
+    await tx.run('DELETE FROM log_items WHERE meal_id = ?', [id])
+    await tx.run('DELETE FROM meals WHERE id = ?', [id])
+  })
+}
 
 /**
  * Persist a reviewed scan. One transaction: the meal row, every ingredient with

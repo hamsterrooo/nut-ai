@@ -3,7 +3,15 @@ import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { reconcileFromMacros } from '@nutai/totals'
-import { currentGoal, overrideTargets, type CurrentGoal } from '../src/data/repo'
+import { formatDecimal, formatInteger } from '../src/i18n/format'
+import {
+  applyRecomputedGoal,
+  currentGoal,
+  overrideTargets,
+  recomputeGoalFromProfile,
+  type CurrentGoal,
+  type RecomputedGoal,
+} from '../src/data/repo'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { radius, space, type } from '../src/theme/tokens'
 
@@ -30,6 +38,7 @@ export default function EditGoals() {
   const [protein, setProtein] = useState('')
   const [fat, setFat] = useState('')
   const [saving, setSaving] = useState(false)
+  const [recalc, setRecalc] = useState<RecomputedGoal | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -44,6 +53,23 @@ export default function EditGoals() {
       alive = false
     }
   }, [])
+
+  useEffect(() => {
+    let alive = true
+    void recomputeGoalFromProfile(Date.now()).then((r) => {
+      if (alive) setRecalc(r)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  async function applyRecalc() {
+    if (!recalc || saving) return
+    setSaving(true)
+    await applyRecomputedGoal(recalc, Date.now())
+    router.back()
+  }
 
   const n = (s: string) => {
     const v = Number.parseFloat(s.replace(',', '.'))
@@ -81,6 +107,26 @@ export default function EditGoals() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 140 }}>
+        {recalc ? (
+          <View style={[styles.recalc, { backgroundColor: theme.bgSunken }]}>
+            <Text style={[type.bodyStrong, { color: theme.text }]}>Przelicz z profilu</Text>
+            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
+              Dla ostatniej wagi {formatDecimal(recalc.weightKg, 1)} kg i wzrostu {formatInteger(recalc.heightCm)} cm
+              wychodzi {formatInteger(recalc.target.target)} kcal: białko {formatInteger(recalc.macros.protein_g)} g,
+              tłuszcz {formatInteger(recalc.macros.fat_g)} g, węglowodany {formatInteger(recalc.macros.carbs_g)} g.
+              {recalc.target.floorExplanation ? ` ${recalc.target.floorExplanation}` : ''}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={applyRecalc}
+              disabled={saving}
+              style={[styles.recalcBtn, { borderColor: theme.border }]}
+            >
+              <Text style={[type.label, { color: theme.text }]}>Zastosuj i włącz cel adaptacyjny</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <Field label="Kalorie" unit="kcal" value={kcal} onChange={setKcal} />
         <Field label="Białko" unit="g" value={protein} onChange={setProtein} />
         <Field label="Tłuszcze" unit="g" value={fat} onChange={setFat} />
@@ -165,6 +211,12 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, fontSize: 22, fontWeight: '700', paddingVertical: space.md },
   derived: { padding: space.lg, borderRadius: radius.lg },
+  recalc: { padding: space.lg, borderRadius: radius.lg, marginBottom: space.lg },
+  recalcBtn: {
+    alignSelf: 'flex-start', marginTop: space.md,
+    paddingHorizontal: space.lg, paddingVertical: space.sm,
+    borderRadius: radius.pill, borderWidth: StyleSheet.hairlineWidth,
+  },
   big: { fontSize: 24, fontWeight: '800', letterSpacing: -0.6 },
   warn: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg },
   note: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg },
