@@ -370,6 +370,27 @@ export function updateAdaptiveTdee(input: AdaptiveTdeeInput): AdaptiveTdeeResult
 }
 
 /**
+ * The calorie target that follows a new TDEE estimate.
+ *
+ * The estimator works on TDEE, not on the target. The gap the person chose
+ * (deficit or surplus) is carried over unchanged, so moving the estimate never
+ * quietly turns a cut into maintenance. A stored gap beyond +-1000 kcal can only
+ * come from an older version of this loop, so it is clamped. The safe floor still
+ * applies.
+ */
+export function retargetFromTdee(input: {
+  priorTdee: number
+  priorTarget: number
+  newTdee: number
+  floor: number
+}): { raw: number; target: number; floorApplied: boolean } {
+  const gap = Math.max(-1000, Math.min(1000, input.priorTarget - input.priorTdee))
+  const raw = input.newTdee + gap
+  const target = Math.max(raw, input.floor)
+  return { raw, target, floorApplied: target > raw }
+}
+
+/**
  * Whether a day is complete enough to enter the intake average.
  *
  * ASSUMPTION, and a load-bearing one: this constant moves people's calorie

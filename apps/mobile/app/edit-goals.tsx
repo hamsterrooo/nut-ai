@@ -2,6 +2,7 @@ import { router } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import type { ActivityLevel } from '@nutai/goals'
 import { reconcileFromMacros } from '@nutai/totals'
 import { formatDecimal, formatInteger } from '../src/i18n/format'
 import {
@@ -14,6 +15,14 @@ import {
 } from '../src/data/repo'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { radius, space, type } from '../src/theme/tokens'
+
+const ACTIVITY_OPTIONS: ReadonlyArray<{ id: ActivityLevel; label: string; hint: string }> = [
+  { id: 'sedentary', label: 'Siedząca', hint: 'Praca przy biurku, mało ruchu' },
+  { id: 'light', label: 'Lekka', hint: '1 do 3 treningów w tygodniu albo dużo chodzenia' },
+  { id: 'moderate', label: 'Umiarkowana', hint: '3 do 5 treningów w tygodniu' },
+  { id: 'active', label: 'Wysoka', hint: '6 do 7 treningów w tygodniu albo praca na nogach' },
+  { id: 'very_active', label: 'Bardzo wysoka', hint: 'Ciężka praca fizyczna plus treningi' },
+]
 
 /**
  * Edit nutrition goals.
@@ -39,6 +48,7 @@ export default function EditGoals() {
   const [fat, setFat] = useState('')
   const [saving, setSaving] = useState(false)
   const [recalc, setRecalc] = useState<RecomputedGoal | null>(null)
+  const [activity, setActivity] = useState<ActivityLevel | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -56,13 +66,15 @@ export default function EditGoals() {
 
   useEffect(() => {
     let alive = true
-    void recomputeGoalFromProfile(Date.now()).then((r) => {
-      if (alive) setRecalc(r)
+    void recomputeGoalFromProfile(Date.now(), activity ?? undefined).then((r) => {
+      if (!alive) return
+      setRecalc(r)
+      if (r && activity == null) setActivity(r.activity)
     })
     return () => {
       alive = false
     }
-  }, [])
+  }, [activity])
 
   async function applyRecalc() {
     if (!recalc || saving) return
@@ -111,6 +123,33 @@ export default function EditGoals() {
           <View style={[styles.recalc, { backgroundColor: theme.bgSunken }]}>
             <Text style={[type.bodyStrong, { color: theme.text }]}>Przelicz z profilu</Text>
             <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
+              Aktywność to największa niewiadoma w tym wyliczeniu i potrafi zmienić wynik o kilkaset kcal.
+              Wybierz ją według typowego tygodnia, nie najlepszego.
+            </Text>
+            <View style={{ marginTop: space.md, gap: space.sm }}>
+              {ACTIVITY_OPTIONS.map((o) => {
+                const selected = recalc.activity === o.id
+                return (
+                  <Pressable
+                    key={o.id}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    onPress={() => setActivity(o.id)}
+                    style={[
+                      styles.activityRow,
+                      {
+                        borderColor: selected ? theme.text : theme.border,
+                        borderWidth: selected ? 1.5 : StyleSheet.hairlineWidth,
+                      },
+                    ]}
+                  >
+                    <Text style={[type.bodyStrong, { color: theme.text }]}>{o.label}</Text>
+                    <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>{o.hint}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+            <Text style={[type.caption, { color: theme.text, marginTop: space.md, lineHeight: 19 }]}>
               Dla ostatniej wagi {formatDecimal(recalc.weightKg, 1)} kg i wzrostu {formatInteger(recalc.heightCm)} cm
               wychodzi {formatInteger(recalc.target.target)} kcal: białko {formatInteger(recalc.macros.protein_g)} g,
               tłuszcz {formatInteger(recalc.macros.fat_g)} g, węglowodany {formatInteger(recalc.macros.carbs_g)} g.
@@ -155,7 +194,7 @@ export default function EditGoals() {
         <View style={[styles.note, { backgroundColor: theme.uncertainBg }]}>
           <Text style={[type.caption, { color: theme.text, lineHeight: 18 }]}>
             Zapis wyłącza cel adaptacyjny. Nie nadpiszemy po cichu liczby wybranej celowo. Adaptację
-            włączysz ponownie, generując plan od nowa.
+            włączysz ponownie przyciskiem w karcie „Przelicz z profilu”.
           </Text>
         </View>
       </ScrollView>
@@ -212,6 +251,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 22, fontWeight: '700', paddingVertical: space.md },
   derived: { padding: space.lg, borderRadius: radius.lg },
   recalc: { padding: space.lg, borderRadius: radius.lg, marginBottom: space.lg },
+  activityRow: { padding: space.md, borderRadius: radius.md },
   recalcBtn: {
     alignSelf: 'flex-start', marginTop: space.md,
     paddingHorizontal: space.lg, paddingVertical: space.sm,

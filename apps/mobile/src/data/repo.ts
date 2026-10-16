@@ -6,12 +6,15 @@ import {
   computeTrend,
   isDayCompleteEnough,
   LB_PER_KG,
+  retargetFromTdee,
+  safeFloor,
   trendSlopeLbPerWeek,
   updateAdaptiveTdee,
   type ActivityLevel,
   type CalorieTarget,
   type Goal,
   type MacroTargets,
+  type Sex,
   type WeightPoint,
 } from '@nutai/goals'
 import Storage from 'expo-sqlite/kv-store'
@@ -192,6 +195,7 @@ export interface RecomputedGoal {
   goalType: Goal
   weightKg: number
   heightCm: number
+  activity: ActivityLevel
 }
 
 /**
@@ -200,7 +204,10 @@ export interface RecomputedGoal {
  * rate rule as the plan screen. Returns null until there is a profile and a weight.
  * Age is the calendar-year difference, so it can be a year high before the birthday.
  */
-export async function recomputeGoalFromProfile(now: number): Promise<RecomputedGoal | null> {
+export async function recomputeGoalFromProfile(
+  now: number,
+  activityOverride?: ActivityLevel,
+): Promise<RecomputedGoal | null> {
   const h = await db()
   const p = await h.get<{
     sex: string | null
@@ -218,41 +225,48 @@ export async function recomputeGoalFromProfile(now: number): Promise<RecomputedG
   const rate = goalType === 'maintain' ? 0 : Math.min(1, Math.max(0.25, deltaLb / 12))
   const age = p.birth_year == null ? 30 : Math.max(13, Math.min(100, new Date(now).getFullYear() - p.birth_year))
 
+  const activity = activityOverride ?? ((p.activity_level ?? 'sedentary') as ActivityLevel)
   const target = computeCalorieTarget({
     sex: p.sex === 'male' || p.sex === 'female' ? p.sex : 'unspecified',
     weightKg: w.weight_kg,
     heightCm: p.height_cm,
     ageYears: age,
-    activity: (p.activity_level ?? 'sedentary') as ActivityLevel,
+    activity,
     goal: goalType,
     rateLbPerWeek: rate,
   })
   const macros = computeMacros(target.target, w.weight_kg, goalType)
-  return { target, macros, goalType, weightKg: w.weight_kg, heightCm: p.height_cm }
+  return { target, macros, goalType, weightKg: w.weight_kg, heightCm: p.height_cm, activity }
 }
 
-/** Save a recomputed plan as a new goals row. Adaptive goals come back ON. */
+/**
+ * Save a recomputed plan: the activity level goes into the profile and the plan
+ * becomes a new goals row. Adaptive goals come back ON.
+ */
 export async function applyRecomputedGoal(r: RecomputedGoal, now: number): Promise<void> {
   const h = await db()
-  await h.run(
-    `INSERT INTO goals
-       (effective_from, goal_type, rate_lb_per_week, target_kcal, target_raw_kcal,
-        floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`,
-    [
-      now,
-      r.goalType,
-      null,
-      r.target.target,
-      r.target.targetRaw,
-      r.target.floorApplied ? 1 : 0,
-      r.macros.protein_g,
-      r.macros.fat_g,
-      r.macros.carbs_g,
-      r.target.bmr,
-      r.target.tdee,
-    ],
-  )
+  await h.transaction(async (tx) => {
+    await tx.run('UPDATE user_profile SET activity_level = ? WHERE id = 1', [r.activity])
+    await tx.run(
+      `INSERT INTO goals
+         (effective_from, goal_type, rate_lb_per_week, target_kcal, target_raw_kcal,
+          floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`,
+      [
+        now,
+        r.goalType,
+        null,
+        r.target.target,
+        r.target.targetRaw,
+        r.target.floorApplied ? 1 : 0,
+        r.macros.protein_g,
+        r.macros.fat_g,
+        r.macros.carbs_g,
+        r.target.bmr,
+        r.target.tdee,
+      ],
+    )
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -573,32 +587,50 @@ export async function runAdaptive(now: number): Promise<AdaptiveOutcome> {
     return { ran: false, reason: `Potrzeba jeszcze około ${5 - admitted} ${pluralPl(5 - admitted, 'dnia', 'dni', 'dni')} z pełnym zapisem posiłków, zanim cel zostanie dostosowany.` }
   }
 
+  // At most one estimator step per local day. Without this every visit to the
+  // Today screen counted as an update, and the 1/(n+k) gain shrank with app opens
+  // instead of with real updates.
+  const lastRunAt = Number(await setting('adaptive.lastRunAt', '0'))
+  if (lastRunAt > 0 && localDate(lastRunAt) === localDate(now)) {
+    return { ran: false, reason: 'Cel sprawdzono dziś, kolejne sprawdzenie jutro.' }
+  }
+
   const updateCount = Number(await setting('adaptive.updateCount', '0'))
+  // The estimator works on TDEE. Feeding it the calorie target (TDEE minus the
+  // deficit) made every update drag the target toward maintenance.
   const result = updateAdaptiveTdee({
-    currentTdee: goal.targetKcal,
+    currentTdee: goal.tdee,
     avgDailyIntakeKcal: sum / admitted,
     trendSlopeLbPerWeek: slope,
     updateCount,
   })
-
-  await putSetting('adaptive.updateCount', String(updateCount + 1))
   await putSetting('adaptive.lastRunAt', String(now))
 
-  if (!result.shouldSurface) {
+  const profile = await h.get<{ sex: string | null }>('SELECT sex FROM user_profile WHERE id = 1')
+  const sex: Sex = profile?.sex === 'male' || profile?.sex === 'female' ? profile.sex : 'unspecified'
+  const next = retargetFromTdee({
+    priorTdee: goal.tdee,
+    priorTarget: goal.targetKcal,
+    newTdee: result.newTdee,
+    floor: safeFloor(sex, goal.bmr),
+  })
+
+  if (!result.shouldSurface || Math.abs(next.target - goal.targetKcal) < 1) {
     return {
       ran: true,
       reason: 'Twój cel nadal jest trafny, nie ma zmiany wartej pokazania.',
       previousKcal: goal.targetKcal,
-      newKcal: result.newTdee,
+      newKcal: goal.targetKcal,
       surfaced: false,
     }
   }
 
+  await putSetting('adaptive.updateCount', String(updateCount + 1))
+
   // Macros re-derive from the new target so protein tracks the body, not the
   // budget, and carbs stay the single derived remainder.
-  const profile = await h.get<{ height_cm: number }>('SELECT height_cm FROM user_profile WHERE id = 1')
   const latestKg = points[points.length - 1]?.weightKg ?? 80
-  const macros = computeMacros(result.newTdee, latestKg, goal.goalType)
+  const macros = computeMacros(next.target, latestKg, goal.goalType)
 
   await h.run(
     `INSERT INTO goals
@@ -609,23 +641,22 @@ export async function runAdaptive(now: number): Promise<AdaptiveOutcome> {
       now,
       goal.goalType,
       null,
-      result.newTdee,
-      result.newTdee,
-      0,
+      next.target,
+      next.raw,
+      next.floorApplied ? 1 : 0,
       macros.protein_g,
       macros.fat_g,
       macros.carbs_g,
       goal.bmr,
-      result.observedTdee,
+      result.newTdee,
     ],
   )
-  void profile
 
   return {
     ran: true,
     reason: 'Target updated.',
     previousKcal: goal.targetKcal,
-    newKcal: result.newTdee,
+    newKcal: next.target,
     surfaced: true,
     explanation: result.explanation,
   }

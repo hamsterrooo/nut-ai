@@ -9,6 +9,7 @@ import {
   isDayCompleteEnough,
   katchMcArdle,
   mifflinStJeor,
+  retargetFromTdee,
   safeFloor,
   TARGET_CHANGE_THRESHOLD_KCAL,
   trendSlopeLbPerWeek,
@@ -248,5 +249,25 @@ describe('day completeness gate', () => {
 
   it('rejects a day with a pending scan, whose calories are not counted yet', () => {
     expect(isDayCompleteEnough({ mealCount: 3, distinctSlotCount: 3, hasQueuedEntries: true })).toBe(false)
+  })
+})
+
+describe('retargetFromTdee keeps the chosen deficit', () => {
+  it('moves the target with the TDEE estimate and keeps the gap', () => {
+    const r = retargetFromTdee({ priorTdee: 2500, priorTarget: 2000, newTdee: 2600, floor: 1500 })
+    expect(r.target).toBeCloseTo(2100, 6)
+    expect(r.floorApplied).toBe(false)
+  })
+
+  it('still respects the safe floor', () => {
+    const r = retargetFromTdee({ priorTdee: 1700, priorTarget: 1300, newTdee: 1400, floor: 1200 })
+    expect(r.raw).toBeCloseTo(1000, 6)
+    expect(r.target).toBe(1200)
+    expect(r.floorApplied).toBe(true)
+  })
+
+  it('clamps a gap an older version of the loop could have left behind', () => {
+    const r = retargetFromTdee({ priorTdee: 2500, priorTarget: 1200, newTdee: 2500, floor: 1200 })
+    expect(r.raw).toBeCloseTo(1500, 6)
   })
 })
