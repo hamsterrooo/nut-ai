@@ -3,6 +3,7 @@ import { router } from 'expo-router'
 import { useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { PressableScale } from '../src/components/motion'
 import { Icon, type IconName } from '../src/components/Icon'
 import { startBarcodeScan, startLabelScan, startReceiptScan, startScan } from '../src/scan/orchestrator'
 import { setPhase } from '../src/scan/store'
@@ -116,7 +117,7 @@ export default function Camera() {
           {MODES.map((m) => {
             const active = mode === m.id
             return (
-              <Pressable
+              <PressableScale
                 key={m.id}
                 accessibilityRole="button"
                 accessibilityLabel={m.label}
@@ -128,7 +129,7 @@ export default function Camera() {
               >
                 <Icon name={m.icon} size={18} color={active ? '#000' : '#fff'} />
                 <Text style={[type.label, { color: active ? '#000' : '#fff' }]}>{m.label}</Text>
-              </Pressable>
+              </PressableScale>
             )
           })}
         </View>
@@ -158,7 +159,7 @@ export default function Camera() {
 
       <View style={[styles.shortcuts, { top: insets.top + space.md }]}>
         {SHORTCUTS.map((s) => (
-          <Pressable
+          <PressableScale
             key={s.route}
             accessibilityRole="button"
             accessibilityLabel={s.label}
@@ -167,7 +168,7 @@ export default function Camera() {
           >
             <Icon name={s.icon} size={16} color="#fff" />
             <Text style={[type.label, { color: '#fff' }]}>{s.short}</Text>
-          </Pressable>
+          </PressableScale>
         ))}
       </View>
     </View>

@@ -3,6 +3,7 @@ import { formatInteger } from '../i18n/format'
 import { useTheme } from '../theme/ThemeProvider'
 import { radius, space, type } from '../theme/tokens'
 import { Icon, type IconName } from './Icon'
+import { AnimatedFill } from './motion'
 
 export interface NutrientRow {
   key: string
@@ -50,7 +51,7 @@ export function NutrientCard({ rows }: { rows: NutrientRow[] }) {
             </View>
             {hasTarget ? (
               <View style={[styles.track, { backgroundColor: theme.ringTrack }]}>
-                <View style={[styles.fill, { width: `${Math.round(pct * 100)}%`, backgroundColor: fill }]} />
+                <AnimatedFill pct={pct} color={fill} height={6} />
               </View>
             ) : null}
           </View>
@@ -66,5 +67,4 @@ const styles = StyleSheet.create({
   line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   label: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   track: { height: 6, borderRadius: 3, marginTop: space.sm, overflow: 'hidden' },
-  fill: { height: 6, borderRadius: 3 },
 })

@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '../../src/components/Icon'
+import { PressableScale } from '../../src/components/motion'
 import { NutrientCard } from '../../src/components/NutrientCard'
 import {
   currentGoal,
@@ -190,7 +191,7 @@ export default function Home() {
                     {m.time} · {m.pending ? 'w trakcie analizy, jeszcze nie liczone' : `${formatInteger(m.kcal)} kcal`}
                   </Text>
                 </View>
-                <Pressable
+                <PressableScale
                   accessibilityRole="button"
                   accessibilityLabel={`Usuń posiłek: ${m.name}`}
                   onPress={() => confirmDelete(m)}
@@ -198,7 +199,7 @@ export default function Home() {
                   style={[styles.ghost, { borderColor: theme.border }]}
                 >
                   <Text style={[type.label, { color: theme.textMuted }]}>Usuń</Text>
-                </Pressable>
+                </PressableScale>
               </View>
             ))}
           </View>

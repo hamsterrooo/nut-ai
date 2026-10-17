@@ -1,7 +1,8 @@
 import { Tabs, router } from 'expo-router'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon, type IconName } from '../../src/components/Icon'
+import { PressableScale } from '../../src/components/motion'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../../src/theme/tokens'
 
@@ -32,14 +33,14 @@ export default function TabLayout() {
   return (
     <>
       <Tabs
-        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: theme.bg } }}
+        screenOptions={{ headerShown: false, animation: 'fade', sceneStyle: { backgroundColor: theme.bg } }}
         tabBar={({ state, navigation }) => (
           <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, space.md) }]}>
             <View style={[styles.pill, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
               {TABS.map((tab, i) => {
                 const focused = state.index === i
                 return (
-                  <Pressable
+                  <PressableScale
                     key={tab.name}
                     accessibilityRole="tab"
                     accessibilityState={{ selected: focused }}
@@ -52,19 +53,19 @@ export default function TabLayout() {
                     <Text style={[type.micro, { color: focused ? theme.text : theme.textFaint, marginTop: 1 }]}>
                       {tab.label}
                     </Text>
-                  </Pressable>
+                  </PressableScale>
                 )
               })}
             </View>
 
-            <Pressable
+            <PressableScale
               accessibilityRole="button"
               accessibilityLabel="Skanuj jedzenie"
               onPress={() => router.push('/camera' as never)}
               style={[styles.fab, { backgroundColor: theme.text }]}
             >
               <Icon name="plus" size={26} color={theme.bg} weight={2.2} />
-            </Pressable>
+            </PressableScale>
           </View>
         )}
       >

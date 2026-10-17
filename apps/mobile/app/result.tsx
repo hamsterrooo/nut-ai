@@ -11,11 +11,13 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { WebLookupResult } from '@nutai/core-schema'
 import { healthScore } from '@nutai/totals'
 import { Icon } from '../src/components/Icon'
 import { NutrientCard } from '../src/components/NutrientCard'
+import { PressableScale, enterItem } from '../src/components/motion'
 import { logMeal } from '../src/data/repo'
 import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
 import {
@@ -192,11 +194,11 @@ export default function Result() {
 
         <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Składniki</Text>
 
-        {result.meal.ingredients.map((row) => {
+        {result.meal.ingredients.map((row, idx) => {
           const item = result.items.find((i) => i.row.id === row.id)
           const lookup = phase.webLookups[row.id]
           return (
-            <View key={row.id}>
+            <Animated.View key={row.id} entering={enterItem(idx)}>
               <View style={[styles.row, { borderColor: theme.border }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={[type.body, { color: theme.text }]}>{row.displayName}</Text>
@@ -232,21 +234,21 @@ export default function Result() {
               </View>
 
               {lookup ? <WebLookupCard rowId={row.id} state={lookup} /> : null}
-            </View>
+            </Animated.View>
           )
         })}
       </ScrollView>
 
       <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, space.lg), backgroundColor: theme.bg, borderColor: theme.border }]}>
         <View style={{ flexDirection: 'row', gap: space.md }}>
-          <Pressable
+          <PressableScale
             accessibilityRole="button"
             onPress={() => setFixOpen(true)}
             style={[styles.secondary, { borderColor: theme.border }]}
           >
             <Icon name="pencil" size={16} color={theme.text} />
             <Text style={[type.bodyStrong, { color: theme.text }]}>Popraw wynik</Text>
-          </Pressable>
+          </PressableScale>
 
           <Pressable
             accessibilityRole="button"
