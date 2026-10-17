@@ -1,6 +1,6 @@
 import { formatInteger } from '../../src/i18n/format'
 import { router, useFocusEffect } from 'expo-router'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Alert, Linking } from 'react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -37,6 +37,15 @@ export default function Profile() {
   const [diet, setDiet] = useState('')
   const [providerLabel, setProviderLabel] = useState('—')
   const [dataBusy, setDataBusy] = useState(false)
+  const scrollRef = useRef<ScrollView>(null)
+
+  // Reset scroll position on every tab focus. expo-router keeps tab screens
+  // mounted, so without this the scroll offset survives switching away and back.
+  useFocusEffect(
+    useCallback(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+    }, []),
+  )
 
   useFocusEffect(
     useCallback(() => {
@@ -143,6 +152,7 @@ export default function Profile() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={{ backgroundColor: theme.bg }}
       contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 150 }}
       showsVerticalScrollIndicator={false}

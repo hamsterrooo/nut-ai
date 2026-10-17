@@ -1,6 +1,6 @@
 import { formatInteger, pluralPl } from '../../src/i18n/format'
 import { router, useFocusEffect } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '../../src/components/Icon'
@@ -46,8 +46,17 @@ export default function Home() {
   const [adaptive, setAdaptive] = useState<AdaptiveOutcome | null>(null)
   const [offset, setOffset] = useState(0)
   const [meals, setMeals] = useState<MealRow[]>([])
+  const scrollRef = useRef<ScrollView>(null)
 
   const selected = useMemo(() => Date.now() + offset * 86_400_000, [offset])
+
+  // Reset scroll position on every tab focus. expo-router keeps tab screens
+  // mounted, so without this the scroll offset survives switching away and back.
+  useFocusEffect(
+    useCallback(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+    }, []),
+  )
 
   useFocusEffect(
     useCallback(() => {
@@ -102,6 +111,7 @@ export default function Home() {
   const empty = totals.mealCount === 0 && totals.pendingCount === 0
   return (
     <ScrollView
+      ref={scrollRef}
       style={{ backgroundColor: theme.bg }}
       contentContainerStyle={{ paddingTop: insets.top + space.sm, paddingBottom: 150 }}
       showsVerticalScrollIndicator={false}
@@ -109,10 +119,6 @@ export default function Home() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.wordmark, { color: theme.text }]}>Nut AI</Text>
-        <View style={[styles.streakPill, { backgroundColor: theme.bgSunken }]}>
-          <Icon name="flame" size={16} color={theme.text} />
-          <Text style={[type.bodyStrong, { color: theme.text }]}>0</Text>
-        </View>
       </View>
 
       {/* Day strip */}
@@ -264,14 +270,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
   },
   wordmark: { fontSize: 30, fontWeight: '800', letterSpacing: -1.2 },
-  streakPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    borderRadius: radius.pill,
-  },
   strip: { flexDirection: 'row', paddingHorizontal: space.md, marginTop: space.lg },
   dayCol: { flex: 1, alignItems: 'center', paddingVertical: space.sm, borderRadius: radius.lg, gap: space.sm },
   dayCircle: {

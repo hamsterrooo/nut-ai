@@ -1,13 +1,11 @@
 import { router } from 'expo-router'
 import { formatDecimal } from '../../src/i18n/format'
-import { useEffect } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { cheapestModel, PROVIDER_MODELS, providersByPrice, type ProviderId } from '@nutai/prompt'
 import { OnboardingScreen } from '../../src/components/onboarding/Chrome'
 import { OptionCard } from '../../src/components/onboarding/Controls'
 import type { IconName } from '../../src/components/Icon'
 import { putSetting } from '../../src/data/repo'
-import { publikAvailable } from '../../src/inference/publik'
 import { nextRoute, stepIndex, TOTAL_STEPS } from '../../src/onboarding/flow'
 import { setAnswer, useAnswers } from '../../src/onboarding/store'
 import { useTheme } from '../../src/theme/ThemeProvider'
@@ -16,11 +14,9 @@ import { radius, space, type } from '../../src/theme/tokens'
 /**
  * How should Nut AI recognize your food?
  *
- * publik API sits FIRST and PRESELECTED: it is not one of the vendors the user
- * chooses among, it is the app's own default supply, disclosed as such on the
- * next screen (cost, and where the photo goes) before anything is minted.
+ * BYO key only on this fork: no managed "publik" supply offered or preselected.
  *
- * THE VENDOR PICKER BELOW IT IS NEUTRAL. Price-sorted, no "recommended" badge,
+ * THE VENDOR PICKER IS NEUTRAL. Price-sorted, no "recommended" badge,
  * no pre-selected vendor. Within a chosen provider the cheapest vision model is
  * pre-selected, which is honest rather than a compromise: the literature says
  * frontier models are NOT better at portion estimation, and portion is the
@@ -42,25 +38,13 @@ export default function ProviderScreen() {
   const theme = useTheme()
   const a = useAnswers()
   const order = providersByPrice()
-  const publik = publikAvailable()
-
-  // Preselection is an onboarding behaviour only: a fresh run with no answer
-  // yet lands on publik; an existing install with a vendor key is never
-  // switched (the resolver reads the settings table, not this store).
-  useEffect(() => {
-    if (publik && a.provider === undefined) setAnswer('provider', 'publik')
-  }, [publik, a.provider])
 
   return (
     <OnboardingScreen
       step={stepIndex('provider')}
       total={TOTAL_STEPS}
       title="Jak Nut AI ma rozpoznawać Twoje jedzenie?"
-      subtitle={
-        publik
-          ? 'Skany domyślnie działają na publik API: połącz konto publik, aby jednorazowo dostać 0,05 $ darmowego użycia. Wolisz własny klucz? Wybierz dostawcę. Twoje zdjęcie trafia tylko do wskazanego dostawcy, nie prowadzimy własnego serwera.'
-          : 'Użyj własnego klucza API. Twoje zdjęcie trafia do wskazanego dostawcy i nigdzie indziej, nie prowadzimy serwera.'
-      }
+      subtitle="Użyj własnego klucza API. Twoje zdjęcie trafia do wskazanego dostawcy i nigdzie indziej, nie prowadzimy serwera."
       ctaDisabled={a.provider === undefined}
       onCta={() => {
         if (a.provider === 'none') void putSetting('provider', 'none')
@@ -69,16 +53,6 @@ export default function ProviderScreen() {
       scroll
     >
       <ScrollView scrollEnabled={false}>
-        {publik ? (
-          <OptionCard
-            label="publik API"
-            sublabel="Bez wklejania klucza. Zaczynasz od 0,00 $; po połączeniu konta publik dostajesz jednorazowo 0,05 $ darmowego użycia. Cena za skan to 50% ceny katalogowej modelu."
-            glyph="scan"
-            selected={a.provider === 'publik'}
-            onPress={() => setAnswer('provider', 'publik')}
-          />
-        ) : null}
-
         {order.map((p) => {
           const cheap = cheapestModel(p)
           return (
@@ -104,7 +78,7 @@ export default function ProviderScreen() {
 
       <View style={[styles.note, { backgroundColor: theme.bgSunken }]}>
         <Text style={[type.caption, { color: theme.textMuted, lineHeight: 19 }]}>
-          {publik ? 'Trzech dostawców poniżej posortowano' : 'Posortowano'} według ceny, bez rekomendacji. Najlepsze modele nie są wyraźnie lepsze w ocenie
+          Posortowano według ceny, bez rekomendacji. Najlepsze modele nie są wyraźnie lepsze w ocenie
           wielkości porcji, a w niej siedzi prawie cały błąd, więc najtańszy model wizyjny jest
           wybrany celowo, a nie z konieczności.
         </Text>

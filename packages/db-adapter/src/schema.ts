@@ -386,7 +386,7 @@ CREATE TABLE IF NOT EXISTS accuracy_baselines (
 `
 
 /** Current user-schema version. Bump with every migration added below. */
-export const USER_SCHEMA_VERSION = 1
+export const USER_SCHEMA_VERSION = 2
 
 export interface Migration {
   version: number
@@ -400,4 +400,17 @@ export interface Migration {
  * Migration tests run forward from EVERY shipped version, because a user who
  * skipped three releases must land in the same place as one who took all of them.
  */
-export const MIGRATIONS: readonly Migration[] = [{ version: 1, sql: USER_SCHEMA }]
+export const MIGRATIONS: readonly Migration[] = [
+  { version: 1, sql: USER_SCHEMA },
+  {
+    // birth_year alone makes age a calendar-year difference, up to a year high
+    // before the birthday. These two columns let age be computed from a full date.
+    // Nullable: an install that migrated from v1 has year only until the user
+    // revisits the birth date screen or profile.
+    version: 2,
+    sql: `
+ALTER TABLE user_profile ADD COLUMN birth_month INTEGER;
+ALTER TABLE user_profile ADD COLUMN birth_day INTEGER;
+`,
+  },
+]

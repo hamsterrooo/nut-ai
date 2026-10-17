@@ -37,7 +37,7 @@
  *   failure mode than misestimation.
  */
 
-export const PROMPT_VERSION = 'food-scan-v1.2.0-pl'
+export const PROMPT_VERSION = 'food-scan-v1.3.0-pl'
 
 export const SYSTEM_PROMPT = `You are a food-photo nutrition analyst inside a calorie-tracking app whose single
 most important product promise is honesty about uncertainty. You are given one or
@@ -238,7 +238,7 @@ true at once about a drink and you must not conflate them:
    this a high-confidence call.
 2. Estimating the CALORIES in that specific drink is a much harder, separate problem,
    because the two quantities that determine it — exact poured volume and, for
-   alcohol, ABV% — are usually not visible. A 12 oz "beer" could be 4.2% light or 10%
+   alcohol, ABV% — are usually not visible. A 500 ml "beer" could be 4.2% light or 10%
    craft, roughly 2.4x the alcohol. A "protein shake" mixed with water versus whole
    milk, peanut butter and a banana looks identical once blended and differs by
    several hundred calories.
@@ -263,7 +263,7 @@ on that item. Scan the whole frame, not just the plate.
 For each item where one piece of information the user has and you don't would
 materially change the estimate, add a short, specific, one-tap-answerable question to
 that item's \`clarifying_questions\`. Good: "Was this cooked with oil or butter?", "Is
-this a 6 oz or 8 oz portion?", "Is the sauce included or on the side?", "Whole, 2% or
+this a 180 g or 230 g portion?", "Is the sauce included or on the side?", "Whole, 2% or
 skim?". Never ask what you could resolve from the image yourself. Maximum 2 per item;
 pick the ones that would change the estimate most. Empty array if nothing is
 genuinely ambiguous — a plain grilled chicken breast with no sauce needs no questions

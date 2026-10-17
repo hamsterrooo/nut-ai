@@ -202,8 +202,24 @@ export interface RecomputedGoal {
  * The plan onboarding would produce today: profile (sex, birth year, height,
  * activity) plus the LATEST weigh-in and the desired weight saved earlier. Same
  * rate rule as the plan screen. Returns null until there is a profile and a weight.
- * Age is the calendar-year difference, so it can be a year high before the birthday.
+ * Age is computed from the full birth date when month and day are known (installs
+ * that onboarded after schema v2, or re-did the birth date screen). Installs that
+ * migrated from v1 and never revisited it fall back to a calendar-year difference,
+ * which can be a year high before the birthday.
  */
+/**
+ * Age from a birth date. Falls back to the calendar-year difference when month
+ * or day is unknown (pre-v2 installs that never revisited the birth date screen).
+ */
+function ageFromBirthDate(now: number, year: number, month: number | null, day: number | null): number {
+  const today = new Date(now)
+  const thisYearAge = today.getFullYear() - year
+  if (month == null || day == null) return thisYearAge
+  const hadBirthdayThisYear =
+    today.getMonth() + 1 > month || (today.getMonth() + 1 === month && today.getDate() >= day)
+  return hadBirthdayThisYear ? thisYearAge : thisYearAge - 1
+}
+
 export async function recomputeGoalFromProfile(
   now: number,
   activityOverride?: ActivityLevel,
@@ -212,9 +228,11 @@ export async function recomputeGoalFromProfile(
   const p = await h.get<{
     sex: string | null
     birth_year: number | null
+    birth_month: number | null
+    birth_day: number | null
     height_cm: number | null
     activity_level: string | null
-  }>('SELECT sex, birth_year, height_cm, activity_level FROM user_profile WHERE id = 1')
+  }>('SELECT sex, birth_year, birth_month, birth_day, height_cm, activity_level FROM user_profile WHERE id = 1')
   const w = await h.get<{ weight_kg: number }>('SELECT weight_kg FROM weight_entries ORDER BY local_date DESC LIMIT 1')
   if (!p || !w || p.height_cm == null) return null
 
@@ -223,7 +241,7 @@ export async function recomputeGoalFromProfile(
   const goalType = inferredGoal({ weightKg: w.weight_kg, desiredWeightKg: desiredKg })
   const deltaLb = Math.abs(desiredKg - w.weight_kg) * LB_PER_KG
   const rate = goalType === 'maintain' ? 0 : Math.min(1, Math.max(0.25, deltaLb / 12))
-  const age = p.birth_year == null ? 30 : Math.max(13, Math.min(100, new Date(now).getFullYear() - p.birth_year))
+  const age = p.birth_year == null ? 30 : Math.max(13, Math.min(100, ageFromBirthDate(now, p.birth_year, p.birth_month, p.birth_day)))
 
   const activity = activityOverride ?? ((p.activity_level ?? 'sedentary') as ActivityLevel)
   const target = computeCalorieTarget({

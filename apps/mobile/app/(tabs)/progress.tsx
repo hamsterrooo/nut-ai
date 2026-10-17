@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle, Line as SvgLine, Path, Rect, Text as SvgText } from 'react-native-svg'
@@ -29,27 +29,33 @@ export default function Progress() {
   const [goal, setGoal] = useState<CurrentGoal | null>(null)
   const [heightCm, setHeightCm] = useState<number | null>(null)
   const [goalKg, setGoalKg] = useState<number | null>(null)
-  const [streak, setStreak] = useState(0)
   const [window, setWindow] = useState<(typeof WINDOWS)[number]['key']>('90D')
+  const scrollRef = useRef<ScrollView>(null)
+
+  // Reset scroll position on every tab focus. expo-router keeps tab screens
+  // mounted, so without this the scroll offset survives switching away and back.
+  useFocusEffect(
+    useCallback(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+    }, []),
+  )
 
   useFocusEffect(
     useCallback(() => {
       let alive = true
       void (async () => {
         const h = await db()
-        const [pts, g, target, profile, days] = await Promise.all([
+        const [pts, g, target, profile] = await Promise.all([
           weightHistory(),
           currentGoal(),
           setting('goal.desiredWeightKg', ''),
           h.get<{ height_cm: number }>('SELECT height_cm FROM user_profile WHERE id = 1'),
-          h.all<{ local_date: string }>('SELECT DISTINCT local_date FROM meals ORDER BY local_date DESC'),
         ])
         if (!alive) return
         setPoints(pts)
         setGoal(g)
         setGoalKg(target ? Number(target) : null)
         setHeightCm(profile?.height_cm ?? null)
-        setStreak(countStreak(days.map((d) => d.local_date)))
       })()
       return () => {
         alive = false
@@ -81,19 +87,14 @@ export default function Progress() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={{ backgroundColor: theme.bg }}
       contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 150 }}
       showsVerticalScrollIndicator={false}
     >
       <Text style={[type.title, { color: theme.text }]}>Postępy</Text>
 
-      {/* Streak credits logging INTENT, so our own failures never break it. */}
       <View style={styles.row}>
-        <View style={[styles.tile, { backgroundColor: theme.bgSunken }]}>
-          <Icon name="flame" size={30} color={theme.text} />
-          <Text style={[styles.tileNum, { color: theme.text }]}>{streak}</Text>
-          <Text style={[type.caption, { color: theme.textMuted }]}>Dni z rzędu</Text>
-        </View>
         <View style={[styles.tile, { backgroundColor: theme.bgSunken }]}>
           <Icon name="scale" size={30} color={theme.text} />
           <Text style={[styles.tileNum, { color: theme.text }]}>{raw.length}</Text>
@@ -215,27 +216,6 @@ export default function Progress() {
       ) : null}
     </ScrollView>
   )
-}
-
-/** Consecutive logged days ending today, or yesterday if today is still open. */
-function countStreak(dates: string[]): number {
-  if (dates.length === 0) return 0
-  const set = new Set(dates)
-  const day = 86_400_000
-  let n = 0
-  let cursor = Date.now()
-  // A day still in progress must not break a streak that is otherwise intact.
-  if (!set.has(iso(cursor))) cursor -= day
-  while (set.has(iso(cursor))) {
-    n++
-    cursor -= day
-  }
-  return n
-}
-
-function iso(ms: number): string {
-  const d = new Date(ms)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 /** Change over N days, measured on the TREND rather than raw entries. */

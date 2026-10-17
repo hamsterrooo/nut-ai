@@ -39,12 +39,14 @@ export async function persistOnboarding(
   await db.transaction(async (tx) => {
     await tx.run(
       `INSERT OR REPLACE INTO user_profile
-         (id, sex, birth_year, height_cm, activity_level, units, weight_visible,
-          gamification, inference_path, created_at)
-       VALUES (1, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+         (id, sex, birth_year, birth_month, birth_day, height_cm, activity_level, units,
+          weight_visible, gamification, inference_path, created_at)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
       [
         answers.sex,
         answers.birthYear,
+        answers.birthMonth,
+        answers.birthDay,
         answers.heightCm,
         activityFor(answers.workoutsPerWeek),
         answers.units,
