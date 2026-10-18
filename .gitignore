@@ -44,3 +44,5 @@ eval/.promptfoo/
 
 # Raw USDA source CSVs — re-downloadable, ~90MB unpacked.
 tools/nutrition-data/data/
+
+nut-ai.zip
