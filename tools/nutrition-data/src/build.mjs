@@ -24,6 +24,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
 import { SOURCES, FDC_DIR, findExtracted, ensureSource } from './fetch.mjs'
+import { readOffRows, insertOffRows } from './off.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO = join(HERE, '../../..')
@@ -231,6 +232,22 @@ async function main() {
     await ingest(dir, label, state)
   }
 
+  // Open Food Facts Poland snapshot. Read and validated BEFORE the artifact is
+  // touched, so a missing or drifted CSV fails the build without leaving a
+  // half-built nutrition.db behind. SKIP_OFF=1 builds the USDA tier only.
+  let off = { rows: [], stats: null }
+  if (process.env.SKIP_OFF === '1') {
+    console.log('Skipping Open Food Facts (SKIP_OFF=1)')
+  } else {
+    const offCsv = process.env.OFF_CSV ?? join(HERE, '../data/off-pl.csv')
+    console.log('Ingesting Open Food Facts Poland snapshot')
+    off = await readOffRows(offCsv, readCsv)
+    const st = off.stats
+    console.log(`  OFF: ${st.read} rows read, ${st.kept} kept`)
+    console.log(`  OFF: dropped ${st.droppedNoName} nameless, ${st.droppedNoEnergy} without energy, ${st.droppedAlcohol} with impossible alcohol`)
+    console.log(`  OFF: ${st.barcodes} barcodes stored (${st.barcodeInvalid} rows without a usable GTIN, ${st.barcodeDuplicate} duplicates), ${st.alcoholic} flagged alcoholic`)
+  }
+
   await mkdir(dirname(OUT), { recursive: true })
   const db = new Database(OUT)
   db.pragma('journal_mode = DELETE')
@@ -307,6 +324,9 @@ async function main() {
       insertTri.run(rowId, f.name)
     }
 
+    // OFF rows follow the USDA rows; their popularity ranks start after rowId.
+    rowId = insertOffRows(db, off.rows, rowId)
+
     for (const p of state.portions) {
       const fid = idMap.get(p.fdcId)
       if (!fid) continue
@@ -321,10 +341,15 @@ async function main() {
     portions: db.prepare('SELECT COUNT(*) c FROM food_portions').get().c,
   }
   db.transaction(() => {
-    manifest.run('tier', 'generic')
-    manifest.run('sources', resolved.map((s) => s.label).join(' | '))
-    manifest.run('licenses', 'CC0-1.0 (USDA FoodData Central)')
-    manifest.run('attribution', 'U.S. Department of Agriculture, Agricultural Research Service. FoodData Central.')
+    const hasOff = off.rows.length > 0
+    manifest.run('tier', hasOff ? 'generic+off_pl' : 'generic')
+    manifest.run('sources', [...resolved.map((s) => s.label), ...(hasOff ? ['Open Food Facts Poland snapshot (off-pl.csv)'] : [])].join(' | '))
+    manifest.run('licenses', hasOff
+      ? 'CC0-1.0 (USDA FoodData Central) | ODbL-1.0 + DbCL-1.0 (Open Food Facts)'
+      : 'CC0-1.0 (USDA FoodData Central)')
+    manifest.run('attribution', 'U.S. Department of Agriculture, Agricultural Research Service. FoodData Central.' +
+      (hasOff ? ' Contains information from Open Food Facts (https://world.openfoodfacts.org), made available under the Open Database License (ODbL 1.0); individual contents under the Database Contents License.' : ''))
+    manifest.run('off_count', String(off.rows.length))
     manifest.run('food_count', String(counts.foods))
     manifest.run('portion_count', String(counts.portions))
     manifest.run('schema_version', '1')
