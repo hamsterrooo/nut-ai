@@ -107,7 +107,7 @@ export default function FoodSearch() {
     if (corpus.foods === 0) {
       return 'Brak bazy: aplikację zbudowano bez nutrition.db. Uruchom `npm run data:build`.'
     }
-    return `${formatInteger(corpus.foods)} produktów · ${formatInteger(corpus.portions)} wag porcji · USDA, CC0`
+    return `${formatInteger(corpus.foods)} produktów · ${formatInteger(corpus.portions)} wag porcji · USDA (CC0), Open Food Facts (ODbL)`
   }, [corpus])
 
   return (
@@ -128,7 +128,7 @@ export default function FoodSearch() {
 
       <TextInput
         accessibilityLabel="Szukaj produktów"
-        placeholder="Szukaj (baza jest po angielsku), np. „chicken breast”"
+        placeholder="Szukaj, np. „pierogi” albo „chicken breast”"
         placeholderTextColor={theme.textFaint}
         value={query}
         onChangeText={setQuery}

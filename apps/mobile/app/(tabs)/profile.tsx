@@ -238,7 +238,7 @@ export default function Profile() {
 
       <Section title="O aplikacji">
         <Row label="Licencja" value="AGPL-3.0" />
-        <Row label="Dane żywieniowe" value="USDA, CC0" />
+        <Row label="Dane żywieniowe" value="USDA + Open Food Facts" />
       </Section>
 
       <Text style={[type.caption, { color: theme.textFaint, marginTop: space.xl, lineHeight: 19 }]}>

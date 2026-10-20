@@ -57,35 +57,51 @@ export async function openUserDb(): Promise<DbAdapter> {
 /**
  * The read-only bundled nutrition corpus.
  *
- * The 4.7 MB artifact built by tools/nutrition-data ships as an app asset and is
+ * The artifact built by tools/nutrition-data ships as an app asset and is
  * imported into the SQLite directory on first launch, because FTS5 needs a real
  * writable path for its temporary files. The app never writes to it — the copy
  * exists for SQLite's benefit, not ours, and a corpus update replaces the file
  * wholesale rather than mutating it.
+ *
+ * The import is idempotent BY FILE NAME, so an app update alone never replaces an
+ * already-imported copy. The name therefore carries a version: bump
+ * NUTRITION_DB_FILE whenever the corpus changes (new tier, new snapshot) and the
+ * next launch imports the new asset under the new name and removes the old copy.
  *
  * WITHOUT THIS IMPORT the app opens an EMPTY database of the same name, and every
  * food silently falls to the AI-estimate path — which looks exactly like a
  * resolver bug while actually being a missing asset. Hence `nutritionCorpusInfo`
  * below, so that failure is legible rather than mysterious.
  */
+const NUTRITION_DB_FILE = 'nutrition-v2.db'
+/** Earlier file names, deleted after a successful import to reclaim the space. */
+const NUTRITION_DB_LEGACY_FILES = ['nutrition.db']
+
 let nutritionImported = false
 
 export async function openNutritionDb(): Promise<DbAdapter> {
   if (!nutritionImported) {
     try {
-      await SQLite.importDatabaseFromAssetAsync('nutrition.db', {
+      await SQLite.importDatabaseFromAssetAsync(NUTRITION_DB_FILE, {
         assetId: require('../../assets/nutrition.db'),
-        // Idempotent by name. Re-copying 4.7 MB on every cold start would be a
-        // visible delay for nothing.
+        // Idempotent by name. Re-copying the corpus on every cold start would be
+        // a visible delay for nothing.
         forceOverwrite: false,
       })
     } catch {
       // Already imported by a previous launch — the common path.
     }
+    for (const legacy of NUTRITION_DB_LEGACY_FILES) {
+      try {
+        await SQLite.deleteDatabaseAsync(legacy)
+      } catch {
+        // Not present (fresh install or already removed).
+      }
+    }
     nutritionImported = true
   }
 
-  const db = await SQLite.openDatabaseAsync('nutrition.db')
+  const db = await SQLite.openDatabaseAsync(NUTRITION_DB_FILE)
   return new ExpoDbAdapter(db)
 }
 
