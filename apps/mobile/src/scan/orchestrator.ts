@@ -27,6 +27,7 @@ import { connectPublik, notePublikWallet, publikAvailable } from '../inference/p
 import { DISCONNECTED_MESSAGE, OWN_KEY_HINT } from '../inference/publik-copy'
 import { baseUrlOf, lookupOptionsOf, resolveInference, type ResolveFailure, type Resolved } from '../inference/resolve'
 import { applyWebOption, getPhase, setPhase, setWebLookup } from './store'
+import { displayNameWithBrand, fetchOffProduct } from './barcode-lookup'
 
 /**
  * The scan orchestrator — capture in, ready-to-review meal out.
@@ -440,6 +441,7 @@ function readyFromRows(
 interface BarcodeFoodRow {
   id: number
   name: string
+  brand: string | null
   serving_size_g: number | null
   energy_kcal: number | null
   protein_g: number | null
@@ -462,8 +464,10 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   try {
     const ndb = await openNutritionDb()
     food = await ndb.get<BarcodeFoodRow>(
-      `SELECT id, name, serving_size_g, energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sodium_mg
-       FROM foods WHERE barcode = ? LIMIT 1`,
+      `SELECT f.id, f.name, b.canonical_name AS brand, f.serving_size_g, f.energy_kcal, f.protein_g,
+              f.fat_g, f.carb_g, f.fiber_g, f.sugar_g, f.sodium_mg
+       FROM foods f LEFT JOIN brands b ON b.id = f.brand_id
+       WHERE f.barcode = ? LIMIT 1`,
       [gtin],
     )
   } catch {
@@ -476,7 +480,7 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
       [
         {
           id: `row_${Date.now()}`,
-          displayName: food.name,
+          displayName: displayNameWithBrand(food.brand, food.name),
           sourceFoodId: String(food.id),
           grams,
           nutrientSnapshot: {
@@ -502,13 +506,47 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
     return
   }
 
-  // Not in the corpus. One web search, if we have the means.
+  // Not in the bundled snapshot. Open Food Facts by barcode comes first: it needs
+  // no key, has no model in the loop and covers products the snapshot filtered out.
+  const off = await fetchOffProduct(gtin)
+  if (off) {
+    readyFromRows(
+      [
+        {
+          id: `row_${Date.now()}`,
+          displayName: displayNameWithBrand(off.brand, off.name),
+          sourceFoodId: null,
+          grams: off.servingG ?? 100,
+          nutrientSnapshot: {
+            kcal: off.nutrients.kcal,
+            protein_g: off.nutrients.protein_g,
+            fat_g: off.nutrients.fat_g,
+            carbs_g: off.nutrients.carbs_g,
+            fiber_g: off.nutrients.fiber_g,
+            sugar_g: off.nutrients.sugar_g,
+            sodium_mg: off.nutrients.sodium_mg,
+          },
+          origin: 'barcode',
+          gramPathway: 'packaged_exact',
+          bandHalfPct: 0.05,
+          isEstimate: false,
+          assumptions: [],
+        },
+      ],
+      null,
+      'barcode-off',
+      null,
+    )
+    return
+  }
+
+  // Still nothing. One web search, if we have the means.
   const resolved = await resolveInference()
   if (!resolved.ok) {
     setPhase({
       kind: 'failed',
       photoUri: '',
-      message: 'Tego kodu kreskowego nie ma we wbudowanej bazie. Tryb Etykieta czyta wydrukowaną tabelę wartości odżywczych bezpośrednio, ale wymaga klucza API.',
+      message: 'Tego kodu kreskowego nie ma we wbudowanej bazie ani w Open Food Facts. Tryb Etykieta czyta wydrukowaną tabelę wartości odżywczych bezpośrednio, ale wymaga klucza API.',
       canRetry: false,
     })
     return
