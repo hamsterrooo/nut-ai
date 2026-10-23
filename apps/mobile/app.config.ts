@@ -33,7 +33,7 @@ const config: ExpoConfig = {
     supportsTablet: false,
     infoPlist: {
       // Required by App Store review, and true: the app talks only to HTTPS
-      // APIs (a vendor the user named, or publik API), which are exempt, so
+      // APIs (the vendor the user named, or Open Food Facts), which are exempt, so
       // there is no non-exempt encryption to declare.
       ITSAppUsesNonExemptEncryption: false,
       // Polish-only app: declaring the localization makes iOS render its own UI (alert

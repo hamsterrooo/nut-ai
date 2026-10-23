@@ -94,7 +94,7 @@ export default function ProviderScreen() {
         </View>
       ) : null}
 
-      {a.provider && a.provider !== 'none' && a.provider !== 'publik' ? (
+      {a.provider && a.provider !== 'none' ? (
         <Text style={[type.caption, { color: theme.textFaint, marginTop: space.lg, lineHeight: 19 }]}>
           Dostępne modele: {PROVIDER_MODELS[a.provider].length}. Model zmienisz i ustawisz
           miesięczny limit wydatków po wpisaniu klucza.

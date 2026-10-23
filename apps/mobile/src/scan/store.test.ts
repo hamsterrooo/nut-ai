@@ -181,17 +181,10 @@ describe('setWebLookup', () => {
 })
 
 describe('a failed phase', () => {
-  it('carries its one action link through setPhase/getPhase', () => {
-    setPhase({
-      kind: 'failed',
-      photoUri: 'p',
-      message: 'Your publik balance is too low for this request.',
-      canRetry: false,
-      failureKind: 'quota-exhausted',
-      action: { label: 'Link this phone & pick a plan', url: 'https://publikhq.com/claim/AB' },
-    })
+  it('carries its short code through setPhase/getPhase', () => {
+    setPhase({ kind: 'failed', photoUri: 'p', message: 'Dostawca ogranicza liczbę zapytań.', canRetry: true, failureKind: 'error-retryable', code: '429' })
     const p = getPhase()
     expect(p.kind).toBe('failed')
-    if (p.kind === 'failed') expect(p.action).toEqual({ label: 'Link this phone & pick a plan', url: 'https://publikhq.com/claim/AB' })
+    if (p.kind === 'failed') expect(p.code).toBe('429')
   })
 })

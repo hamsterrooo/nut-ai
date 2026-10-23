@@ -7,7 +7,7 @@
  * Why an OFF API fallback exists: the bundled snapshot only holds products tagged
  * `en:poland` with complete macros. A product sold in Poland but tagged for another
  * country is missing locally, and the only remaining fallback was a Gemini web
- * search that is unreliable and hits free-tier limits (HTTP 429).
+ * search that is unreliable and, on the free tier, always fails (HTTP 429).
  *
  * OFF usage terms: one API call per real user scan, with an identifying
  * User-Agent. startBarcodeScan calls this once per scan and never in a loop.
@@ -129,7 +129,7 @@ export function parseOffProduct(json: unknown): OffProduct | null {
 
 const OFF_ENDPOINT = 'https://world.openfoodfacts.org/api/v2/product'
 const OFF_FIELDS = 'code,product_name,product_name_pl,brands,nutriments,serving_quantity,nutrition_data_per'
-const OFF_USER_AGENT = 'NutAI-PL/0.1 (https://github.com/hamsterrooo/nut-ai)'
+const OFF_USER_AGENT = 'NutAI-PL/0.1 (https://github.com/Blueturboguy07/nut-ai)'
 
 export interface FetchOffOptions {
   fetchImpl?: typeof fetch

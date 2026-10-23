@@ -22,10 +22,8 @@ import { recomputeAfterEdit, runPipeline, validatePayload, type ScanResult } fro
 import { stampSchemaVersion } from './stamp-schema-version'
 import { openNutritionDb } from '../db/expo-adapter'
 import { loadFoodDb } from '../db/portions'
-import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup, type ScanFailure } from '../inference/pathA/client'
-import { connectPublik, notePublikWallet, publikAvailable } from '../inference/publik'
-import { DISCONNECTED_MESSAGE, OWN_KEY_HINT } from '../inference/publik-copy'
-import { baseUrlOf, lookupOptionsOf, resolveInference, type ResolveFailure, type Resolved } from '../inference/resolve'
+import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup, type ScanFailure, type WebLookupOutcome } from '../inference/pathA/client'
+import { resolveInference, type ResolveFailure, type Resolved } from '../inference/resolve'
 import { applyWebOption, getPhase, setPhase, setWebLookup } from './store'
 import { displayNameWithBrand, fetchOffProduct } from './barcode-lookup'
 
@@ -59,7 +57,7 @@ function wireSchemaFor(provider: ProviderId): Record<string, unknown> {
 }
 
 /**
- * Inline base64 stays under 1 MB: publik API asks for it, and no vendor
+ * Inline base64 stays under 1 MB: no vendor
  * needs more for a 1024-px meal photo. A 1024-px JPEG at q0.8 is ~200–600 KB;
  * the steps below only run on an unusually busy frame.
  */
@@ -94,36 +92,28 @@ function codeProp(err: ScanFailure | undefined): { code: string } | Record<strin
 
 function resolveFailureCopy(err: ResolveFailure, feature: 'scan' | 'label' | 'receipt'): { message: string; failureKind: 'no-key' | 'key-invalid' } {
   if (err.kind === 'key-missing') return { message: 'Brak zapisanego klucza. Wpisz go ponownie w Profilu.', failureKind: 'key-invalid' }
-  if (err.kind === 'publik-disconnected') return { message: DISCONNECTED_MESSAGE, failureKind: 'no-key' }
-  const publikHint = publikAvailable() ? ' Możesz też włączyć publik API w Profilu, bez klucza.' : ''
   const base =
     feature === 'scan'
       ? 'Skanowanie zdjęć wymaga klucza API. Dodaj go w Profilu. Kod kreskowy, wyszukiwanie i ręczne dodawanie działają bez niego.'
       : feature === 'label'
         ? 'Odczyt etykiety wymaga klucza API. Dodaj go w Profilu albo znajdź produkt po kodzie kreskowym lub w wyszukiwarce.'
         : 'Odczyt paragonu wymaga klucza API. Dodaj go w Profilu.'
-  return { message: base + publikHint, failureKind: 'no-key' }
-}
-
-/** On publik, every dead end also names the way out (the user's own key). */
-function failureMessage(err: ScanFailure, r: Resolved): string {
-  if (!r.metered || err.retryable || err.action || /own key/i.test(err.message)) return err.message
-  return err.message.replace(/\.?$/, '') + OWN_KEY_HINT
+  return { message: base, failureKind: 'no-key' }
 }
 
 /**
- * `401 key_revoked { reprovision: true }` is the idle sweep: the key died of
- * disuse, the 401 arrived before any model ran, and one re-mint against the
- * stored install identity gets the same install back (no second starter).
- * Bounded to once per app session — this is the one exception to "never
- * auto-retry", and it is not a retry of a billed request.
+ * Web lookup is OFF. It rides on Gemini's Google Search grounding, which the
+ * free tier does not include (limit 0, so every call is a 429). Callers already
+ * treat a failed lookup as "no match", so the answer is a local failure with no
+ * request. Flip to true only on a billed key.
  */
-let reprovisionedThisSession = false
-async function maybeReprovision(err: ScanFailure | undefined, r: Resolved): Promise<boolean> {
-  if (!r.metered || !err?.reprovision || reprovisionedThisSession) return false
-  reprovisionedThisSession = true
-  const re = await connectPublik({ force: true })
-  return re.ok
+const WEB_LOOKUP_ENABLED = false
+
+async function webLookup(r: Resolved, input: { itemName: string; brand: string | null; visualContext?: string | null }): Promise<WebLookupOutcome> {
+  if (!WEB_LOOKUP_ENABLED) {
+    return { ok: false, error: { kind: 'model-unavailable', message: 'Wyszukiwanie w sieci jest wyłączone.', retryable: false } }
+  }
+  return runWebLookup(r.dialect, { model: r.textModel, ...input }, r.credential)
 }
 
 export async function startScan(photoUri: string): Promise<void> {
@@ -175,26 +165,22 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     provider: r.dialect,
     model: r.model,
     credential: r.credential,
-    ...baseUrlOf(r),
     imagesBase64: [base64],
     localSignalsBlock: opts.fixBlock ?? '',
     jsonSchema: wireSchemaFor(r.dialect),
   })
 
   if (!outcome.ok) {
-    if (await maybeReprovision(outcome.error, r)) return analyze(photoUri, base64, opts)
     setPhase({
       kind: 'failed',
       photoUri,
-      message: failureMessage(outcome.error, r),
+      message: outcome.error.message,
       canRetry: outcome.error.retryable,
       failureKind: outcome.error.kind,
       ...codeProp(outcome.error),
-      ...(outcome.error.action ? { action: outcome.error.action } : {}),
     })
     return
   }
-  if (outcome.value.wallet) void notePublikWallet(outcome.value.wallet)
 
   setPhase({ kind: 'analyzing', photoUri, stage: 'matching' })
 
@@ -315,18 +301,11 @@ async function refineMisses(result: ScanResult, rawPayload: unknown, r: Resolved
       setWebLookup(rowId, { status: 'running' })
 
       const source = payload?.items[index]
-      const lookup = await runWebLookup(
-        r.dialect,
-        {
-          model: r.textModel,
-          itemName: source?.name ?? item.row.displayName,
-          brand: source?.brand ?? null,
-          visualContext: source?.legible_label_text ?? null,
-          ...lookupOptionsOf(r),
-        },
-        r.credential,
-      )
-      if (lookup.wallet) void notePublikWallet(lookup.wallet)
+      const lookup = await webLookup(r, {
+        itemName: source?.name ?? item.row.displayName,
+        brand: source?.brand ?? null,
+        visualContext: source?.legible_label_text ?? null,
+      })
 
       if (!lookup.ok) {
         setWebLookup(rowId, { status: 'failed' })
@@ -454,8 +433,7 @@ interface BarcodeFoodRow {
 
 /**
  * Barcode: corpus GTIN hit costs NOTHING — no model call, no network. A miss
- * falls to one web search when a key exists, and to a clear pointer at the
- * label scanner when it does not.
+ * tries Open Food Facts once, then points at the label scanner.
  */
 export async function startBarcodeScan(gtin: string): Promise<void> {
   setPhase({ kind: 'analyzing', photoUri: '', stage: 'matching' })
@@ -540,79 +518,14 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
     return
   }
 
-  // Still nothing. One web search, if we have the means.
-  const resolved = await resolveInference()
-  if (!resolved.ok) {
-    setPhase({
-      kind: 'failed',
-      photoUri: '',
-      message: 'Tego kodu kreskowego nie ma we wbudowanej bazie ani w Open Food Facts. Tryb Etykieta czyta wydrukowaną tabelę wartości odżywczych bezpośrednio, ale wymaga klucza API.',
-      canRetry: false,
-    })
-    return
-  }
-  const r = resolved.value
-
-  const lookup = await runWebLookup(
-    r.dialect,
-    { model: r.textModel, itemName: `the packaged food product with barcode (GTIN/UPC/EAN) ${gtin}`, brand: null, ...lookupOptionsOf(r) },
-    r.credential,
-  )
-  if (lookup.wallet) void notePublikWallet(lookup.wallet)
-  const parsed = lookup.ok ? WebLookupResultZ.safeParse(lookup.raw) : null
-  const opt = parsed?.success && parsed.data.found ? parsed.data.options[0] : undefined
-  if (!lookup.ok && lookup.error) {
-    // The call itself failed (limit, model, network): say so, not "not found".
-    setPhase({
-      kind: 'failed',
-      photoUri: '',
-      message: failureMessage(lookup.error, r),
-      canRetry: lookup.error.retryable,
-      failureKind: lookup.error.kind,
-      ...codeProp(lookup.error),
-    })
-    return
-  }
-  if (!opt) {
-    setPhase({
-      kind: 'failed',
-      photoUri: '',
-      message: 'Nie znaleziono tego kodu kreskowego w bazie ani w sieci. Spróbuj trybu Etykieta, który czyta wydrukowaną tabelę wartości odżywczych bezpośrednio.',
-      canRetry: false,
-    })
-    return
-  }
-
-  const grams = opt.serving_g ?? 100
-  const per100 = grams > 0 ? 100 / grams : 0
-  readyFromRows(
-    [
-      {
-        id: `row_${Date.now()}`,
-        displayName: opt.label,
-        sourceFoodId: null,
-        grams,
-        nutrientSnapshot: {
-          kcal: opt.calories_kcal * per100,
-          protein_g: opt.protein_g * per100,
-          fat_g: opt.fat_g * per100,
-          carbs_g: opt.carbs_g * per100,
-          fiber_g: opt.fiber_g == null ? null : opt.fiber_g * per100,
-          sugar_g: null,
-          sodium_mg: opt.sodium_mg == null ? null : opt.sodium_mg * per100,
-        },
-        origin: 'web_lookup',
-        sourceUrl: parsed!.success ? parsed!.data.source_url : null,
-        gramPathway: 'packaged_exact',
-        bandHalfPct: 0.1,
-        isEstimate: false,
-        assumptions: [],
-      },
-    ],
-    null,
-    'barcode-web',
-    null,
-  )
+  // Not in the snapshot and not in OFF. The label scanner reads the printed table
+  // with a plain vision call, which the free tier allows.
+  setPhase({
+    kind: 'failed',
+    photoUri: '',
+    message: 'Tego kodu kreskowego nie ma we wbudowanej bazie ani w Open Food Facts. Użyj trybu Etykieta: zrób zdjęcie tabeli wartości odżywczych na opakowaniu.',
+    canRetry: false,
+  })
 }
 
 /**
@@ -641,18 +554,15 @@ export async function startLabelScan(photoUri: string): Promise<void> {
   const r = resolved.value
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
 
-  const outcome = await runLabelScan(r.dialect, { model: r.model, imageBase64: base64, ...baseUrlOf(r) }, r.credential)
-  if (outcome.wallet) void notePublikWallet(outcome.wallet)
+  const outcome = await runLabelScan(r.dialect, { model: r.model, imageBase64: base64 }, r.credential)
   if (!outcome.ok) {
-    if (await maybeReprovision(outcome.error, r)) return startLabelScan(photoUri)
     setPhase({
       kind: 'failed',
       photoUri,
-      message: outcome.error ? failureMessage(outcome.error, r) : 'Nie udało się odczytać etykiety.',
+      message: outcome.error ? outcome.error.message : 'Nie udało się odczytać etykiety.',
       canRetry: outcome.error?.retryable ?? false,
       failureKind: outcome.error?.kind,
       ...codeProp(outcome.error),
-      ...(outcome.error?.action ? { action: outcome.error.action } : {}),
     })
     return
   }
@@ -740,18 +650,15 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
   const r = resolved.value
 
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  const outcome = await runReceiptScan(r.dialect, { model: r.model, imageBase64: base64, ...baseUrlOf(r) }, r.credential)
-  if (outcome.wallet) void notePublikWallet(outcome.wallet)
+  const outcome = await runReceiptScan(r.dialect, { model: r.model, imageBase64: base64 }, r.credential)
   if (!outcome.ok) {
-    if (await maybeReprovision(outcome.error, r)) return startReceiptScan(photoUri)
     setPhase({
       kind: 'failed',
       photoUri,
-      message: outcome.error ? failureMessage(outcome.error, r) : 'Nie udało się odczytać paragonu.',
+      message: outcome.error ? outcome.error.message : 'Nie udało się odczytać paragonu.',
       canRetry: outcome.error?.retryable ?? false,
       failureKind: outcome.error?.kind,
       ...codeProp(outcome.error),
-      ...(outcome.error?.action ? { action: outcome.error.action } : {}),
     })
     return
   }
@@ -774,11 +681,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
   const looked = await Promise.all(
     items.map(async (item) => ({
       item,
-      lookup: await runWebLookup(
-        r.dialect,
-        { model: r.textModel, itemName: item.name, brand: merchant, ...lookupOptionsOf(r) },
-        r.credential,
-      ),
+      lookup: await webLookup(r, { itemName: item.name, brand: merchant }),
     })),
   )
 
@@ -787,8 +690,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
   const unresolved: string[] = []
 
   for (const { item, lookup } of looked) {
-    if (lookup.wallet) void notePublikWallet(lookup.wallet)
-    const parsed = lookup.ok ? WebLookupResultZ.safeParse(lookup.raw) : null
+      const parsed = lookup.ok ? WebLookupResultZ.safeParse(lookup.raw) : null
     const data = parsed?.success && parsed.data.found && parsed.data.options.length > 0 ? parsed.data : null
     if (!data) {
       unresolved.push(item.name)
@@ -848,8 +750,7 @@ export async function lookupOther(rowId: string, typed: string): Promise<void> {
   const r = resolved.value
 
   setWebLookup(rowId, { status: 'running' })
-  const lookup = await runWebLookup(r.dialect, { model: r.textModel, itemName: typed, brand: null, ...lookupOptionsOf(r) }, r.credential)
-  if (lookup.wallet) void notePublikWallet(lookup.wallet)
+  const lookup = await webLookup(r, { itemName: typed, brand: null })
   if (!lookup.ok) {
     setWebLookup(rowId, { status: 'failed' })
     return

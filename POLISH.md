@@ -6,10 +6,11 @@ doprecyzowujące i uzasadnienia pewności, aktualne modele Google.
 
 Jeszcze nie zrobione (etap 2):
 
-- Import produktów z Open Food Facts Polska (kody kreskowe). Do tego czasu wbudowana baza
-  nie ma żadnych kodów, a skan kodu korzysta z wyszukiwania w sieci (wymaga klucza API).
+- Kody kreskowe: wbudowana baza OFF Polska, potem Open Food Facts API. Brak trafienia odsyła do
+  trybu Etykieta. Wyszukiwanie w sieci przez Gemini jest wyłączone (`WEB_LOOKUP_ENABLED` w
+  `orchestrator.ts`), bo grounding z Google Search nie działa na darmowym kluczu.
 - Polskie nazwy produktów w bazie. Wyszukiwarka ręczna dalej szuka po angielsku (USDA).
-- Tłumaczenie ekranów i komunikatów publik API (w forku bez tokena są ukryte).
+- Usunięty został cały podsystem publik API (zarządzany klucz, portfel, ekrany); aplikacja działa wyłącznie na własnym kluczu użytkownika.
 
 Konwersje w kodzie: 1 g soli = 400 mg sodu, 1 kcal = 4,184 kJ (`packages/core-schema/src/eu-units.ts`).
 Lista modeli Google: `packages/prompt/src/providers.ts`. Google wycofuje modele co kilka miesięcy.

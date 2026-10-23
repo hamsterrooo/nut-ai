@@ -24,13 +24,8 @@ import type { ProviderId } from '@nutai/prompt'
 
 export type CredentialKind = 'api_key' | 'oauth'
 
-/**
- * One Keychain slot per provider, plus `publik` for the `pk_` key publik API
- * mints on this phone. The publik slot is written by `publik.ts` after the
- * user accepts the disclosure — still runtime, still never from source — and
- * publik code never touches the three vendor slots.
- */
-export type CredentialSlot = ProviderId | 'publik'
+/** One Keychain slot per provider. */
+export type CredentialSlot = ProviderId
 
 export interface StoredCredential {
   kind: CredentialKind

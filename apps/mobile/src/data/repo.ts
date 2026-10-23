@@ -23,7 +23,6 @@ import { inferredGoal } from '../onboarding/store'
 import { EXPORT_TABLES, WIPE_ONLY_TABLES } from './backup-core'
 import { localDate, slotFor } from './date-utils'
 import { clearCredential } from '../inference/credentials'
-import { disconnectPublik } from '../inference/publik'
 import { openUserDb } from '../db/expo-adapter'
 
 export { localDate, slotFor }
@@ -52,8 +51,7 @@ export async function db(): Promise<DbAdapter> {
  * Wipe every local trace and send the app back to the first onboarding screen.
  *
  * Deletes user data, drops the stored API credentials out of the Keychain,
- * disconnects publik API (revoking this phone's key on the server, best
- * effort), and clears the completion flag. The bundled nutrition corpus is left alone — it is
+ * and clears the completion flag. The bundled nutrition corpus is left alone — it is
  * a read-only build artifact, not user data, and re-importing 4.7 MB to prove a
  * point would just make this slow.
  */
@@ -77,7 +75,6 @@ export async function resetEverything(): Promise<void> {
   for (const p of ['anthropic', 'openai', 'google'] as const) {
     await clearCredential(p)
   }
-  await disconnectPublik()
 
   await Storage.removeItem(ONBOARDING_DONE_KEY)
 }

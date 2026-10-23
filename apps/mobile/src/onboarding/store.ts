@@ -70,11 +70,10 @@ export interface OnboardingAnswers {
   rolloverCalories: boolean | null
   healthConnected: boolean
   /**
-   * 'publik' is the app's own default supply (publik API); a vendor is the
-   * user's own key; 'none' means no cloud path — barcode, label OCR, search
-   * and manual still work.
+   * A vendor is the user's own key; 'none' means no cloud path — barcode,
+   * search and manual still work.
    */
-  provider: ProviderId | 'publik' | 'none' | undefined
+  provider: ProviderId | 'none' | undefined
   providerModel: string | null
 }
 

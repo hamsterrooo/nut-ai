@@ -3,7 +3,6 @@ import { useState } from 'react'
 import {
   ActivityIndicator,
   Image,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -90,16 +89,6 @@ export default function Result() {
           <Text selectable style={[type.micro, { color: theme.textFaint, marginTop: space.sm, textAlign: 'center' }]}>
             Kod: {phase.code}
           </Text>
-        ) : null}
-        {/* The one link a failure may carry (publik API's top_up_url). The URL
-            was origin-checked when the failure was classified, never here. */}
-        {phase.action ? (
-          <Pressable
-            onPress={() => void Linking.openURL(phase.action!.url)}
-            style={[styles.primary, { backgroundColor: theme.text, marginTop: space.xl, paddingHorizontal: space.xl }]}
-          >
-            <Text style={[type.bodyStrong, { color: theme.bg }]}>{phase.action.label}</Text>
-          </Pressable>
         ) : null}
         {phase.canRetry ? (
           <Pressable

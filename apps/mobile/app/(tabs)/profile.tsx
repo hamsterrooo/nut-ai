@@ -8,8 +8,6 @@ import type { ProviderId } from '@nutai/prompt'
 import { exportAndShareBackup, finishRestore, importBackup, pickBackupFile } from '../../src/data/backup'
 import { currentGoal, resetEverything, setting, type CurrentGoal } from '../../src/data/repo'
 import { loadCredential, maskCredential } from '../../src/inference/credentials'
-import { loadPublikWallet, publikConnected } from '../../src/inference/publik'
-import { formatMicros } from '../../src/inference/publik-core'
 import { PROVIDER_NAME } from '../../src/components/CredentialForm'
 import { Icon } from '../../src/components/Icon'
 import { useTheme } from '../../src/theme/ThemeProvider'
@@ -61,19 +59,6 @@ export default function Profile() {
         setDiet(d)
         if (!p || p === 'none') {
           setProviderLabel('Niepołączony')
-        } else if (p === 'publik') {
-          const [connected, wallet] = await Promise.all([publikConnected(), loadPublikWallet()])
-          if (!alive) return
-          // publik 0059: an unlinked phone sits at $0.00 until it is linked, so
-          // that row says so instead of "$0.00 left".
-          const unlinkedAtZero = wallet?.claimState === 'anonymous' && wallet.balanceMicros != null && wallet.balanceMicros <= 0
-          setProviderLabel(
-            !connected
-              ? 'publik API · rozłączono'
-              : unlinkedAtZero
-                ? `publik API · ${formatMicros(0)} · niepołączone`
-                : `publik API · ${formatMicros(wallet?.balanceMicros)} zostało`,
-          )
         } else {
           const cred = await loadCredential(p as ProviderId)
           if (!alive) return
@@ -220,7 +205,7 @@ export default function Profile() {
           onPress={() => {
             Alert.alert(
               'Usunąć wszystko i zacząć od nowa?',
-              'Usuwa z tego urządzenia Twój profil, cele, historię wagi, zapisane posiłki i zapisane klucze API oraz rozłącza publik API. Nie można tego cofnąć, a kopii na serwerze nie ma, bo nie mamy własnego serwera.',
+              'Usuwa z tego urządzenia Twój profil, cele, historię wagi, zapisane posiłki i zapisane klucze API. Nie można tego cofnąć, a kopii na serwerze nie ma, bo nie mamy własnego serwera.',
               [
                 { text: 'Anuluj', style: 'cancel' },
                 {
