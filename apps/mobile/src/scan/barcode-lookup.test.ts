@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayNameWithBrand, fetchOffProduct, parseOffProduct, unescapeHtml } from './barcode-lookup'
+import { displayNameWithBrand, fetchOffProduct, lookupOffProduct, parseOffProduct, unescapeHtml } from './barcode-lookup'
 
 // Real response for GTIN 7622200007332 (trimmed to the keys the parser reads plus a few neighbours).
 const MILKA = {
@@ -174,5 +174,31 @@ describe('fetchOffProduct', () => {
     expect(await fetchOffProduct('abc', { fetchImpl })).toBeNull()
     expect(await fetchOffProduct('123', { fetchImpl })).toBeNull()
     expect(called).toBe(false)
+  })
+})
+
+describe('lookupOffProduct', () => {
+  const res = (body: unknown, ok = true, status = 200) => ({ ok, status, json: async () => body }) as unknown as Response
+  const run = (r: () => Promise<Response>) => lookupOffProduct('4335619297043', { fetchImpl: (async () => r()) as unknown as typeof fetch })
+
+  it('reports a missing product as not_found (status 0, with or without HTTP 404)', async () => {
+    expect(await run(async () => res({ status: 0, status_verbose: 'product not found' }, true, 200))).toEqual({ kind: 'not_found' })
+    expect(await run(async () => res({ status: 0 }, false, 404))).toEqual({ kind: 'not_found' })
+  })
+
+  it('reports a product without usable macros as unusable', async () => {
+    expect(await run(async () => res({ status: 1, product: { product_name: 'X', nutriments: {} } }))).toEqual({ kind: 'unusable' })
+  })
+
+  it('reports offline, timeout, HTTP errors and bad JSON as network', async () => {
+    expect(await run(async () => { throw new Error('offline') })).toEqual({ kind: 'network' })
+    expect(await run(async () => res({}, false, 503))).toEqual({ kind: 'network' })
+    expect(await run(async () => res({}, false, 429))).toEqual({ kind: 'network' })
+    expect(await run(async () => ({ ok: true, status: 200, json: async () => { throw new Error('bad') } }) as unknown as Response)).toEqual({ kind: 'network' })
+  })
+
+  it('returns the product when found', async () => {
+    const r = await run(async () => res(MILKA))
+    expect(r.kind).toBe('found')
   })
 })

@@ -42,6 +42,7 @@ export const EXPORT_TABLES = [
   'user_containers',
   'saved_meals',
   'personal_gram_priors',
+  'user_portions',
   'food_attribute_memory',
   'weight_entries',
   'water_entries',

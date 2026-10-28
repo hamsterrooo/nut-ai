@@ -386,7 +386,7 @@ CREATE TABLE IF NOT EXISTS accuracy_baselines (
 `
 
 /** Current user-schema version. Bump with every migration added below. */
-export const USER_SCHEMA_VERSION = 2
+export const USER_SCHEMA_VERSION = 3
 
 export interface Migration {
   version: number
@@ -411,6 +411,20 @@ export const MIGRATIONS: readonly Migration[] = [
     sql: `
 ALTER TABLE user_profile ADD COLUMN birth_month INTEGER;
 ALTER TABLE user_profile ADD COLUMN birth_day INTEGER;
+`,
+  },
+  {
+    // User-defined helper units ("1 ciastko = 25 g") remembered per product. Keyed by
+    // product NAME, not corpus row id: row ids shift on every corpus rebuild.
+    version: 3,
+    sql: `
+CREATE TABLE IF NOT EXISTS user_portions (
+  food_name  TEXT NOT NULL,
+  label      TEXT NOT NULL,
+  grams      REAL NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (food_name, label)
+);
 `,
   },
 ]

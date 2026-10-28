@@ -136,9 +136,25 @@ export interface FetchOffOptions {
   timeoutMs?: number
 }
 
-/** One lookup. Any failure (offline, timeout, HTTP error, bad JSON) is null: the caller moves on to its next fallback. */
-export async function fetchOffProduct(gtin: string, opts: FetchOffOptions = {}): Promise<OffProduct | null> {
-  if (!/^\d{8,14}$/.test(gtin)) return null
+/**
+ * Why a lookup produced no product. The caller words each case differently:
+ * "not_found" and "unusable" are about the product, "network" is about the phone
+ * or OFF, and only the first two make the label scanner the right next step.
+ */
+export type OffLookup =
+  | { kind: 'found'; product: OffProduct }
+  | { kind: 'not_found' }
+  | { kind: 'unusable' }
+  | { kind: 'network' }
+
+/**
+ * One lookup, with the reason for a miss. OFF answers a missing product with
+ * `status: 0` (HTTP 404 on the v2 endpoint); a product that exists but lacks
+ * usable macros parses to null and is reported as "unusable". Offline, timeout,
+ * other HTTP errors and unreadable JSON are all "network".
+ */
+export async function lookupOffProduct(gtin: string, opts: FetchOffOptions = {}): Promise<OffLookup> {
+  if (!/^\d{8,14}$/.test(gtin)) return { kind: 'not_found' }
   const fetchImpl = opts.fetchImpl ?? fetch
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 8000)
@@ -147,11 +163,27 @@ export async function fetchOffProduct(gtin: string, opts: FetchOffOptions = {}):
       headers: { 'User-Agent': OFF_USER_AGENT, Accept: 'application/json' },
       signal: ctrl.signal,
     })
-    if (!res.ok) return null
-    return parseOffProduct(await res.json())
+    let json: unknown = null
+    try {
+      json = await res.json()
+    } catch {
+      json = null
+    }
+    const status = typeof json === 'object' && json !== null ? (json as Record<string, unknown>).status : undefined
+    if (status === 0) return { kind: 'not_found' }
+    if (res.status === 404 && json === null) return { kind: 'not_found' }
+    if (!res.ok || json === null) return { kind: 'network' }
+    const product = parseOffProduct(json)
+    return product ? { kind: 'found', product } : { kind: 'unusable' }
   } catch {
-    return null
+    return { kind: 'network' }
   } finally {
     clearTimeout(timer)
   }
+}
+
+/** One lookup. Any failure (offline, timeout, HTTP error, bad JSON) is null: the caller moves on to its next fallback. */
+export async function fetchOffProduct(gtin: string, opts: FetchOffOptions = {}): Promise<OffProduct | null> {
+  const r = await lookupOffProduct(gtin, opts)
+  return r.kind === 'found' ? r.product : null
 }

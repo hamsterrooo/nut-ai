@@ -62,6 +62,10 @@ export type ScanPhase =
       message: string
       canRetry: boolean
       failureKind?: ScanFailureKind | 'no-key'
+      /** Screen title; defaults to the meal-photo wording when absent. */
+      headline?: string
+      /** Show the "photograph the label" action (barcode misses). */
+      offerLabel?: boolean
       /** Short copyable reason shown under the message: HTTP status, failure kind or SCHEMA. */
       code?: string
     }

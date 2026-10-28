@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions } from 'expo-camera'
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -45,7 +45,8 @@ export default function Camera() {
   const [permission, requestPermission] = useCameraPermissions()
   const cameraRef = useRef<CameraView>(null)
   const [busy, setBusy] = useState(false)
-  const [mode, setMode] = useState<CameraMode>('food')
+  const params = useLocalSearchParams<{ mode?: string }>()
+  const [mode, setMode] = useState<CameraMode>(() => MODES.find((m) => m.id === params.mode)?.id ?? 'food')
   // Barcode frames arrive continuously; only the FIRST detection may fire.
   const barcodeFired = useRef(false)
 

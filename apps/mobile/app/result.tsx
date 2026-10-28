@@ -78,9 +78,11 @@ export default function Result() {
   if (phase.kind === 'failed') {
     return (
       <View style={[styles.center, { backgroundColor: theme.bg }]}>
-        <Image source={{ uri: phase.photoUri }} style={[styles.photo, { opacity: 0.5 }]} />
-        <Text style={[type.heading, { color: theme.text, marginTop: space.xl, textAlign: 'center' }]}>
-          Nie udało się odczytać tego posiłku
+        {phase.photoUri !== '' ? (
+          <Image source={{ uri: phase.photoUri }} style={[styles.photo, { opacity: 0.5 }]} />
+        ) : null}
+        <Text style={[type.heading, { color: theme.text, marginTop: phase.photoUri !== '' ? space.xl : 0, textAlign: 'center' }]}>
+          {phase.headline ?? 'Nie udało się odczytać tego posiłku'}
         </Text>
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, textAlign: 'center', lineHeight: 19 }]}>
           {phase.message}
@@ -96,6 +98,14 @@ export default function Result() {
             style={[styles.primary, { backgroundColor: theme.text, marginTop: space.xl, paddingHorizontal: space.xl }]}
           >
             <Text style={[type.bodyStrong, { color: theme.bg }]}>Spróbuj ponownie</Text>
+          </Pressable>
+        ) : null}
+        {phase.offerLabel ? (
+          <Pressable
+            onPress={() => { reset(); router.replace({ pathname: '/camera', params: { mode: 'label' } } as never) }}
+            style={[styles.primary, { backgroundColor: phase.canRetry ? 'transparent' : theme.text, marginTop: space.xl, paddingHorizontal: space.xl }]}
+          >
+            <Text style={[type.bodyStrong, { color: phase.canRetry ? theme.text : theme.bg }]}>Zrób zdjęcie etykiety</Text>
           </Pressable>
         ) : null}
         <Pressable
@@ -126,7 +136,11 @@ export default function Result() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 120 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 120 }}
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={[type.title, { color: theme.text }]}>
           {result.items[0]?.row.displayName ?? 'Twój posiłek'}
         </Text>

@@ -24,7 +24,11 @@ interface PortionRow {
   gram_weight: number
 }
 
-export async function resolveSelection(nutritionDb: DbAdapter, candidate: ScoredCandidate): Promise<ManualFoodSelection> {
+export async function resolveSelection(
+  nutritionDb: DbAdapter,
+  candidate: ScoredCandidate,
+  gramsOverride?: number,
+): Promise<ManualFoodSelection> {
   const foodId = Number(candidate.foodId)
 
   const [food, defaultPortion, anyPortion] = await Promise.all([
@@ -48,7 +52,8 @@ export async function resolveSelection(nutritionDb: DbAdapter, candidate: Scored
     // FNDDS default portion first, any recorded portion second, and only
     // then a flat 100 g — matching per-100g basis every corpus row already
     // carries, so at worst the number is "unscaled," never fabricated.
-    grams: defaultPortion?.gram_weight ?? anyPortion?.gram_weight ?? 100,
+    // A grams value the user typed wins over every default.
+    grams: gramsOverride ?? defaultPortion?.gram_weight ?? anyPortion?.gram_weight ?? 100,
     nutrientSnapshot: {
       kcal: candidate.energyKcal ?? 0,
       protein_g: food?.protein_g ?? 0,

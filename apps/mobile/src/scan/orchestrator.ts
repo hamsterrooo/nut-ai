@@ -25,7 +25,7 @@ import { loadFoodDb } from '../db/portions'
 import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup, type ScanFailure, type WebLookupOutcome } from '../inference/pathA/client'
 import { resolveInference, type ResolveFailure, type Resolved } from '../inference/resolve'
 import { applyWebOption, getPhase, setPhase, setWebLookup } from './store'
-import { displayNameWithBrand, fetchOffProduct } from './barcode-lookup'
+import { displayNameWithBrand, lookupOffProduct } from './barcode-lookup'
 
 /**
  * The scan orchestrator — capture in, ready-to-review meal out.
@@ -49,6 +49,14 @@ const EMPTY_PRIORS: PersonalPriors = { get: () => null, containers: new Map() }
 
 /** Kept for retry, so a network blip does not re-run image preprocessing. */
 let lastCapture: { photoUri: string; base64: string } | null = null
+/** What "Spróbuj ponownie" repeats. Without this a failed label or receipt retried as a meal photo. */
+let lastRetry: { kind: 'scan' | 'label' | 'receipt'; photoUri: string } | { kind: 'barcode'; gtin: string } = { kind: 'scan', photoUri: '' }
+
+const HEADLINE = {
+  label: 'Nie udało się odczytać etykiety',
+  receipt: 'Nie udało się odczytać paragonu',
+  barcode: 'Nie znaleziono produktu',
+} as const
 
 function wireSchemaFor(provider: ProviderId): Record<string, unknown> {
   if (provider === 'anthropic') return anthropicWireSchema(VISION_WIRE_SCHEMA)
@@ -117,6 +125,7 @@ async function webLookup(r: Resolved, input: { itemName: string; brand: string |
 }
 
 export async function startScan(photoUri: string): Promise<void> {
+  lastRetry = { kind: 'scan', photoUri }
   setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string
@@ -137,6 +146,9 @@ export async function startScan(photoUri: string): Promise<void> {
 }
 
 export async function retryScan(): Promise<void> {
+  if (lastRetry.kind === 'barcode') return startBarcodeScan(lastRetry.gtin)
+  if (lastRetry.kind === 'label') return startLabelScan(lastRetry.photoUri)
+  if (lastRetry.kind === 'receipt') return startReceiptScan(lastRetry.photoUri)
   if (!lastCapture) return
   const { photoUri, base64 } = lastCapture
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
@@ -436,6 +448,7 @@ interface BarcodeFoodRow {
  * tries Open Food Facts once, then points at the label scanner.
  */
 export async function startBarcodeScan(gtin: string): Promise<void> {
+  lastRetry = { kind: 'barcode', gtin }
   setPhase({ kind: 'analyzing', photoUri: '', stage: 'matching' })
 
   let food: BarcodeFoodRow | null = null
@@ -486,8 +499,9 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
 
   // Not in the bundled snapshot. Open Food Facts by barcode comes first: it needs
   // no key, has no model in the loop and covers products the snapshot filtered out.
-  const off = await fetchOffProduct(gtin)
-  if (off) {
+  const lookup = await lookupOffProduct(gtin)
+  if (lookup.kind === 'found') {
+    const off = lookup.product
     readyFromRows(
       [
         {
@@ -518,13 +532,30 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
     return
   }
 
-  // Not in the snapshot and not in OFF. The label scanner reads the printed table
-  // with a plain vision call, which the free tier allows.
+  // Not in the snapshot and no usable OFF product. The label scanner reads the
+  // printed table with a plain vision call, which the free tier allows. A network
+  // failure is a different case: the code may well be in OFF, so retry comes first.
+  if (lookup.kind === 'network') {
+    setPhase({
+      kind: 'failed',
+      photoUri: '',
+      headline: HEADLINE.barcode,
+      message: 'Nie udało się sprawdzić kodu w Open Food Facts: brak sieci albo serwer nie odpowiada. Spróbuj ponownie. Jeśli kod nadal nie przejdzie, użyj trybu Etykieta.',
+      canRetry: true,
+      offerLabel: true,
+    })
+    return
+  }
   setPhase({
     kind: 'failed',
     photoUri: '',
-    message: 'Tego kodu kreskowego nie ma we wbudowanej bazie ani w Open Food Facts. Użyj trybu Etykieta: zrób zdjęcie tabeli wartości odżywczych na opakowaniu.',
+    headline: HEADLINE.barcode,
+    message:
+      lookup.kind === 'unusable'
+        ? 'Ten produkt jest w Open Food Facts, ale bez kompletnych wartości odżywczych. Zrób zdjęcie tabeli wartości odżywczych na opakowaniu.'
+        : 'Tego kodu kreskowego nie ma we wbudowanej bazie ani w Open Food Facts. Zrób zdjęcie tabeli wartości odżywczych na opakowaniu.',
     canRetry: false,
+    offerLabel: true,
   })
 }
 
@@ -535,20 +566,21 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
  * the one place the app promises exactness.
  */
 export async function startLabelScan(photoUri: string): Promise<void> {
+  lastRetry = { kind: 'label', photoUri }
   setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string
   try {
     base64 = await preprocess(photoUri)
   } catch {
-    setPhase({ kind: 'failed', photoUri, message: 'Nie udało się odczytać zdjęcia. Zrób je ponownie.', canRetry: false })
+    setPhase({ kind: 'failed', photoUri, headline: HEADLINE.label, message: 'Nie udało się odczytać zdjęcia. Zrób je ponownie.', canRetry: false })
     return
   }
   lastCapture = { photoUri, base64 }
 
   const resolved = await resolveInference()
   if (!resolved.ok) {
-    setPhase({ kind: 'failed', photoUri, canRetry: false, ...resolveFailureCopy(resolved.error, 'label') })
+    setPhase({ kind: 'failed', photoUri, headline: HEADLINE.label, canRetry: false, ...resolveFailureCopy(resolved.error, 'label') })
     return
   }
   const r = resolved.value
@@ -559,6 +591,7 @@ export async function startLabelScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
+      headline: HEADLINE.label,
       message: outcome.error ? outcome.error.message : 'Nie udało się odczytać etykiety.',
       canRetry: outcome.error?.retryable ?? false,
       failureKind: outcome.error?.kind,
@@ -572,6 +605,7 @@ export async function startLabelScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
+      headline: HEADLINE.label,
       message: 'To nie wygląda na czytelną etykietę wartości odżywczych. Ułóż całą tabelę w kadrze, płasko i przy dobrym świetle.',
       canRetry: true,
     })
@@ -581,6 +615,7 @@ export async function startLabelScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
+      headline: HEADLINE.label,
       message: 'Etykietę odczytano, ale nie podaje masy porcji w gramach, a bez niej liczb nie da się uczciwie przeskalować. Jeśli jest linia z wielkością porcji lub kolumna na 100 g, ujmij ją na zdjęciu.',
       canRetry: true,
     })
@@ -631,20 +666,21 @@ export async function startLabelScan(photoUri: string): Promise<void> {
 const MAX_RECEIPT_ITEMS = 8
 
 export async function startReceiptScan(photoUri: string): Promise<void> {
+  lastRetry = { kind: 'receipt', photoUri }
   setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string
   try {
     base64 = await preprocess(photoUri)
   } catch {
-    setPhase({ kind: 'failed', photoUri, message: 'Nie udało się odczytać zdjęcia. Zrób je ponownie.', canRetry: false })
+    setPhase({ kind: 'failed', photoUri, headline: HEADLINE.receipt, message: 'Nie udało się odczytać zdjęcia. Zrób je ponownie.', canRetry: false })
     return
   }
   lastCapture = { photoUri, base64 }
 
   const resolved = await resolveInference()
   if (!resolved.ok) {
-    setPhase({ kind: 'failed', photoUri, canRetry: false, ...resolveFailureCopy(resolved.error, 'receipt') })
+    setPhase({ kind: 'failed', photoUri, headline: HEADLINE.receipt, canRetry: false, ...resolveFailureCopy(resolved.error, 'receipt') })
     return
   }
   const r = resolved.value
@@ -655,6 +691,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
+      headline: HEADLINE.receipt,
       message: outcome.error ? outcome.error.message : 'Nie udało się odczytać paragonu.',
       canRetry: outcome.error?.retryable ?? false,
       failureKind: outcome.error?.kind,
@@ -668,6 +705,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
+      headline: HEADLINE.receipt,
       message: 'Na tym paragonie nie znaleziono pozycji z jedzeniem. Ułóż część z pozycjami płasko i ostro.',
       canRetry: true,
     })
@@ -731,6 +769,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
     setPhase({
       kind: 'failed',
       photoUri,
+      headline: HEADLINE.receipt,
       message: `Paragon odczytano, ale nie znaleziono wartości odżywczych dla: ${unresolved.join(', ')}. Dodaj je przez wyszukiwanie.`,
       canRetry: false,
     })

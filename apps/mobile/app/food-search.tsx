@@ -9,6 +9,7 @@ import { nutritionCorpusInfo, openNutritionDb } from '../src/db/expo-adapter'
 import { db } from '../src/data/repo'
 import { resolveSelection } from '../src/data/food-search-select'
 import { logManualFood } from '../src/data/manual-food'
+import { PortionSheet } from '../src/components/PortionSheet'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
@@ -21,8 +22,8 @@ import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
  * `db()`, so — like every other screen in this app — it is only exercised by
  * the running app, not by that test.
  */
-async function selectFood(nutritionDb: DbAdapter, candidate: ScoredCandidate, now: number): Promise<number> {
-  const selection = await resolveSelection(nutritionDb, candidate)
+async function selectFood(nutritionDb: DbAdapter, candidate: ScoredCandidate, now: number, grams: number): Promise<number> {
+  const selection = await resolveSelection(nutritionDb, candidate, grams)
   const userDb = await db()
   return logManualFood(userDb, selection, now)
 }
@@ -47,6 +48,7 @@ export default function FoodSearch() {
   const [outcome, setOutcome] = useState<string>('')
   const [busy, setBusy] = useState(false)
   const [selectingId, setSelectingId] = useState<string | null>(null)
+  const [picked, setPicked] = useState<ScoredCandidate | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -89,12 +91,12 @@ export default function FoodSearch() {
     return () => { alive = false; clearTimeout(timer) }
   }, [db, query])
 
-  async function handleSelect(candidate: ScoredCandidate) {
+  async function handleSelect(candidate: ScoredCandidate, grams: number) {
     if (!db || selectingId != null) return
     setSelectingId(candidate.foodId)
     setError(null)
     try {
-      await selectFood(db, candidate, Date.now())
+      await selectFood(db, candidate, Date.now(), grams)
       router.back()
     } catch {
       setError('Nie udało się zapisać tego produktu, spróbuj ponownie.')
@@ -115,6 +117,7 @@ export default function FoodSearch() {
       style={{ backgroundColor: theme.bg }}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 160 }}
+      automaticallyAdjustKeyboardInsets
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={[type.title, { color: theme.text }]}>Baza produktów</Text>
@@ -154,7 +157,7 @@ export default function FoodSearch() {
           accessibilityRole="button"
           accessibilityLabel={`Dodaj ${r.name}`}
           disabled={selectingId != null}
-          onPress={() => handleSelect(r)}
+          onPress={() => { setError(null); setPicked(r) }}
           style={({ pressed }) => [
             styles.row,
             { borderColor: theme.border, minHeight: MIN_TAP_TARGET, opacity: pressed ? 0.6 : 1 },
@@ -181,6 +184,16 @@ export default function FoodSearch() {
           a możesz zapisać go jako własny produkt, żeby następnym razem dopasował się od razu.
         </Text>
       )}
+
+      {picked != null && db != null ? (
+        <PortionSheet
+          candidate={picked}
+          nutritionDb={db}
+          busy={selectingId != null}
+          onCancel={() => { if (selectingId == null) setPicked(null) }}
+          onConfirm={(grams) => handleSelect(picked, grams)}
+        />
+      ) : null}
     </ScrollView>
   )
 }
