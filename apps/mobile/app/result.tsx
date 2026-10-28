@@ -13,11 +13,13 @@ import {
 import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { WebLookupResult } from '@nutai/core-schema'
+import type { SelectedQuestion } from '@nutai/repair'
 import { healthScore } from '@nutai/totals'
 import { Icon } from '../src/components/Icon'
 import { NutrientCard } from '../src/components/NutrientCard'
 import { PressableScale, enterItem } from '../src/components/motion'
 import { logMeal } from '../src/data/repo'
+import { isAnswerable } from '../src/scan/answers'
 import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
 import {
   answerQuestion,
@@ -25,6 +27,7 @@ import {
   editGrams,
   removeRow,
   reset,
+  selectedAnswer,
   useScan,
   type WebLookupState,
 } from '../src/scan/store'
@@ -131,8 +134,11 @@ export default function Result() {
   }
 
   const { result } = phase
-  const highlighted = result.questions.filter((q) => q.state === 'highlighted')
-  const preAnswered = result.questions.filter((q) => q.state === 'pre_answered')
+  // Only questions whose answer changes the numbers are shown. A chip that does
+  // nothing (no sauce row to scale, no handler yet) is hidden rather than faked.
+  const answerable = result.questions.filter((q) => isAnswerable(q.question.id, result.meal))
+  const highlighted = answerable.filter((q) => q.state === 'highlighted')
+  const preAnswered = answerable.filter((q) => q.state === 'pre_answered')
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -165,35 +171,19 @@ export default function Result() {
 
         {/* Highlighted questions: at most two, ever. */}
         {highlighted.map((q) => (
-          <View key={q.question.id} style={[styles.qCard, { borderColor: theme.uncertain, backgroundColor: theme.uncertainBg }]}>
-            <Text style={[type.bodyStrong, { color: theme.text }]}>{q.text}</Text>
-            <View style={styles.chipRow}>
-              {q.question.options.map((opt) => (
-                <Pressable
-                  key={opt.value}
-                  onPress={() => answerQuestion(q, opt.value)}
-                  hitSlop={space.sm}
-                  style={[styles.chip, { borderColor: theme.uncertain }]}
-                >
-                  <Text style={[type.label, { color: theme.text }]}>{opt.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
+          <QuestionCard key={q.question.id} q={q} selected={selectedAnswer(phase, q.question.id)} />
         ))}
 
-        {/* Every silent default is shown. None is ever hidden. */}
-        {preAnswered.length > 0 && (
-          <View style={{ marginTop: space.lg, gap: space.xs }}>
-            {preAnswered.map((q) => (
-              <Pressable key={q.question.id} onPress={() => answerQuestion(q, q.appliedDefault ?? '')} hitSlop={space.xs}>
-                <Text style={[type.caption, { color: theme.textMuted }]}>
-                  {q.disclosure} · <Text style={{ color: theme.uncertain }}>zmień</Text>
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        {/* Every silent default stays visible, with the same one-tap chips. */}
+        {preAnswered.map((q) => (
+          <QuestionCard
+            key={q.question.id}
+            q={q}
+            selected={selectedAnswer(phase, q.question.id)}
+            subtitle={q.disclosure}
+            muted
+          />
+        ))}
 
         <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Składniki</Text>
 
@@ -331,6 +321,63 @@ export default function Result() {
 function domainOf(url: string): string {
   const m = url.match(/^https?:\/\/(?:www\.)?([^/]+)/i)
   return m?.[1] ?? url
+}
+
+/**
+ * One clarifying question with single-select, deselectable chips.
+ *
+ * The selected chip is filled. Tapping it again clears the answer and the
+ * meal returns to the original estimate (see scan/answers.ts).
+ */
+function QuestionCard({
+  q,
+  selected,
+  subtitle,
+  muted,
+}: {
+  q: SelectedQuestion
+  selected: string | null
+  subtitle?: string
+  muted?: boolean
+}) {
+  const theme = useTheme()
+  return (
+    <View
+      style={[
+        styles.qCard,
+        { borderColor: theme.uncertain, backgroundColor: muted ? theme.bgSunken : theme.uncertainBg },
+      ]}
+    >
+      <Text style={[type.bodyStrong, { color: theme.text }]}>{q.text}</Text>
+      {subtitle ? (
+        <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>{subtitle}</Text>
+      ) : null}
+      <View style={styles.chipRow}>
+        {q.question.options.map((opt) => {
+          const on = selected === opt.value
+          return (
+            <Pressable
+              key={opt.value}
+              onPress={() => answerQuestion(q, opt.value)}
+              hitSlop={space.sm}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={({ pressed }) => [
+                styles.chip,
+                {
+                  borderColor: theme.uncertain,
+                  backgroundColor: on ? theme.uncertain : 'transparent',
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Text style={[type.label, { color: on ? theme.bg : theme.text }]}>{opt.label}</Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    </View>
+  )
 }
 
 /**

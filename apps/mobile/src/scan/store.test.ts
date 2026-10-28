@@ -4,11 +4,13 @@ import type { IngredientRow, LoggedMeal } from '@nutai/core-schema'
 import { recomputeAfterEdit } from '@nutai/pipeline'
 import type { ScanResult } from '@nutai/pipeline'
 import {
+  answerQuestion,
   applyWebOption,
   editGrams,
   getPhase,
   removeRow,
   reset,
+  selectedAnswer,
   setPhase,
   setPortionEaten,
   setWebLookup,
@@ -186,5 +188,33 @@ describe('a failed phase', () => {
     const p = getPhase()
     expect(p.kind).toBe('failed')
     if (p.kind === 'failed') expect(p.code).toBe('429')
+  })
+})
+
+describe('answerQuestion', () => {
+  const q = (id: string) =>
+    ({ question: { id }, text: '', expectedValue: 0, state: 'highlighted', appliedDefault: null, disclosure: '' }) as never
+
+  it('selects, switches and deselects back to the original estimate', () => {
+    readyWith([row()])
+    const full = readyPhase().result.totals.kcal
+    answerQuestion(q('portion_eaten'), '0.5')
+    expect(selectedAnswer(readyPhase(), 'portion_eaten')).toBe('0.5')
+    expect(readyPhase().result.totals.kcal).toBeLessThan(full * 0.6)
+    expect(readyPhase().result.totals.kcal).toBeGreaterThan(full * 0.4)
+    answerQuestion(q('portion_eaten'), '0.25')
+    expect(selectedAnswer(readyPhase(), 'portion_eaten')).toBe('0.25')
+    answerQuestion(q('portion_eaten'), '0.25')
+    expect(selectedAnswer(readyPhase(), 'portion_eaten')).toBeNull()
+    expect(readyPhase().result.totals.kcal).toBe(full)
+  })
+
+  it('a manual gram edit drops the chip that scaled that row', () => {
+    readyWith([row(), row({ id: 'r2', displayName: 'Sos czosnkowy', grams: 50 })])
+    answerQuestion(q('sauce_type'), 'heavy')
+    expect(selectedAnswer(readyPhase(), 'sauce_type')).toBe('heavy')
+    editGrams('r2', 70)
+    expect(selectedAnswer(readyPhase(), 'sauce_type')).toBeNull()
+    expect(readyPhase().result.meal.ingredients[1]!.grams).toBe(70)
   })
 })

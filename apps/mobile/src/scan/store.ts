@@ -5,6 +5,7 @@ import type { ScanResult } from '@nutai/pipeline'
 import { recomputeAfterEdit } from '@nutai/pipeline'
 import type { SelectedQuestion } from '@nutai/repair'
 import { useSyncExternalStore } from 'react'
+import { applyAnswer, revert, undoRowId, type Answers } from './answers'
 import type { ScanFailureKind } from '../inference/pathA/client'
 
 /**
@@ -55,6 +56,8 @@ export type ScanPhase =
       bands: Band[]
       meta: ScanMeta | null
       webLookups: Record<string, WebLookupState>
+      /** Selected chip per question id, with the undo that restores the original estimate. */
+      answers?: Answers
     }
   | {
       kind: 'failed'
@@ -97,33 +100,57 @@ export function getPhase(): ScanPhase {
 }
 
 /** Every edit path funnels through here, so the invariant holds in exactly one place. */
-function mutateMeal(fn: (meal: LoggedMeal) => LoggedMeal) {
+function mutateMeal(fn: (meal: LoggedMeal) => LoggedMeal, answers?: Answers) {
   if (phase.kind !== 'ready') return
   const meal = fn(phase.result.meal)
   const { totals, mealBand } = recomputeAfterEdit(meal, phase.bands)
   phase = {
     ...phase,
     result: { ...phase.result, meal, totals, mealBand },
+    ...(answers ? { answers } : {}),
   }
   emit()
 }
 
+/**
+ * A manual edit of a row wins over any chip answer that scaled it: the chip
+ * deselects and the typed value stands, instead of a later revert overwriting it.
+ */
+function answersWithout(rowId: string): Answers | undefined {
+  if (phase.kind !== 'ready' || !phase.answers) return undefined
+  const kept: Answers = {}
+  let changed = false
+  for (const [id, a] of Object.entries(phase.answers)) {
+    if (undoRowId(a.undo) === rowId) changed = true
+    else kept[id] = a
+  }
+  return changed ? kept : undefined
+}
+
 export function editGrams(rowId: string, grams: number) {
   if (!Number.isFinite(grams) || grams < 0) return
-  mutateMeal((meal) => ({
-    ...meal,
-    ingredients: meal.ingredients.map((r) => (r.id === rowId ? { ...r, grams } : r)),
-  }))
+  const answers = answersWithout(rowId)
+  mutateMeal(
+    (meal) => ({
+      ...meal,
+      ingredients: meal.ingredients.map((r) => (r.id === rowId ? { ...r, grams } : r)),
+    }),
+    answers,
+  )
 }
 
 export function removeRow(rowId: string) {
   // No special-casing "AI-added" versus "user-added" once a row is in the list.
   // There is no data-model difference between "the AI added rice and I removed
   // it" and "I removed rice because I didn't eat it".
-  mutateMeal((meal) => ({
-    ...meal,
-    ingredients: meal.ingredients.filter((r) => r.id !== rowId),
-  }))
+  const answers = answersWithout(rowId)
+  mutateMeal(
+    (meal) => ({
+      ...meal,
+      ingredients: meal.ingredients.filter((r) => r.id !== rowId),
+    }),
+    answers,
+  )
 }
 
 export function addRow(row: IngredientRow) {
@@ -143,21 +170,26 @@ export function setPortionEaten(fraction: number) {
  * primitives, which is what makes the two impossible to get out of sync.
  */
 export function answerQuestion(q: SelectedQuestion, value: string) {
-  if (q.question.id === 'portion_eaten') {
-    const f = Number(value)
-    if (Number.isFinite(f)) setPortionEaten(f)
+  if (phase.kind !== 'ready') return
+  const id = q.question.id
+  const answers = phase.answers ?? {}
+  const current = answers[id]
+
+  // Tapping the selected chip again undoes the answer: back to the original estimate.
+  if (current && current.value === value) {
+    const { [id]: _removed, ...rest } = answers
+    mutateMeal((meal) => revert(meal, current.undo), rest)
     return
   }
-  if (q.question.id === 'cooking_oil') {
-    if (value === 'none') {
-      if (phase.kind !== 'ready') return
-      const oil = phase.result.meal.ingredients.find((r) => r.origin === 'assumption_filler')
-      if (oil) removeRow(oil.id)
-    }
-    return
-  }
-  // Remaining answers swap a row's snapshot against a bundled filler food. That
-  // lookup belongs to the resolver and is wired at the screen level.
+
+  const applied = applyAnswer(phase.result.meal, id, value, current)
+  if (!applied) return
+  mutateMeal(() => applied.meal, { ...answers, [id]: applied.state })
+}
+
+/** The currently selected value for a question, or null. */
+export function selectedAnswer(p: ScanPhase, questionId: string): string | null {
+  return p.kind === 'ready' ? (p.answers?.[questionId]?.value ?? null) : null
 }
 
 export function setWebLookup(rowId: string, state: WebLookupState) {

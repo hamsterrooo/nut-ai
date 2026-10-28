@@ -97,7 +97,7 @@ export const QUESTION_BANK: readonly BankQuestion[] = [
   {
     rank: 4,
     id: 'sauce_type',
-    text: 'Jaki sos lub dressing i ile?',
+    text: 'Ile sosu lub dressingu?',
     expectedSwingKcal: 200,
     multiplicative: false,
     options: [
@@ -106,7 +106,7 @@ export const QUESTION_BANK: readonly BankQuestion[] = [
       { label: 'Dużo', value: 'heavy' },
     ],
     silentDefault: 'medium',
-    defaultDisclosure: 'Założono średnią ilość najpopularniejszego sosu',
+    defaultDisclosure: 'Założono średnią ilość sosu',
     reasons: ['sauce_type_ambiguous'],
   },
   {
