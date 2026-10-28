@@ -3,7 +3,6 @@ import {
   buildGeminiRequest,
   buildLabelScanRequest,
   buildOpenAIRequest,
-  buildReceiptScanRequest,
   buildTextJsonRequest,
   buildWebLookupRequest,
   computeScanCost,
@@ -262,16 +261,6 @@ export async function runLabelScan(
   return postVisionJson(provider, buildLabelScanRequest(provider, input, credential), fetchImpl, timeoutMs)
 }
 
-/** Receipt transcription: same transport, different instruction and validator. */
-export async function runReceiptScan(
-  provider: ProviderId,
-  input: { model: string; imageBase64: string; baseUrl?: string },
-  credential: Credential,
-  fetchImpl: typeof fetch = fetch,
-  timeoutMs = 30_000,
-): Promise<WebLookupOutcome> {
-  return postVisionJson(provider, buildReceiptScanRequest(provider, input, credential), fetchImpl, timeoutMs)
-}
 
 async function postVisionJson(
   provider: ProviderId,

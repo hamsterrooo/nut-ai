@@ -205,6 +205,9 @@ export async function runPipeline(
         prepFacet: prepFacetFor(item),
         modelCategory: null,
         estimatedGrams: gram.grams,
+        // No brand and no legible label means no sign of a ready-made product, so
+        // the dish is treated as home-cooked and shop-bought rows are not offered.
+        homemade: item.brand == null && item.legible_label_text == null,
       })
       if (r.zeroHit) zeroHitCount++
 
@@ -222,6 +225,16 @@ export async function runPipeline(
         // Take the top candidate provisionally so the user sees a number rather
         // than a blank while they decide. It is labeled, and one tap changes it.
         food = await loadFood(deps.db, r.outcome.candidates[0]?.foodId ?? '')
+      }
+
+      // A plated soup or stew cannot be a broth-thin row. Open Food Facts carries
+      // stock, concentrates and "per 100 ml prepared" entries filed under dish names;
+      // matching one of those turns 400 g of soup into 24 kcal. Treat such a match as
+      // a miss so the model's own estimate (flagged as an estimate) is used instead.
+      if (food && DENSE_DISH.test(item.canonical_food_key) && (food.energyKcal ?? Infinity) < MIN_DISH_KCAL_PER_100G) {
+        food = null
+        resolution = 'miss'
+        candidates = undefined
       }
     }
 
@@ -338,6 +351,10 @@ function prepFacetFor(item: Item): string | null {
   if (item.cooking_method_cues.includes('raw')) return 'raw'
   return null
 }
+
+/** Dish-type keys whose database match must carry real energy density. */
+const DENSE_DISH = /\b(soup|stew|zupa|krem|gulasz|bigos|curry|chili|risotto|pasta|lasagn)/i
+const MIN_DISH_KCAL_PER_100G = 15
 
 function emptyMeal(now: number): LoggedMeal {
   return {

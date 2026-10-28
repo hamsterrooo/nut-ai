@@ -37,6 +37,11 @@ export interface ScoringContext {
   modelCategory: string | null
   /** The gram engine's estimate, used for portion plausibility. */
   estimatedGrams: number | null
+  /**
+   * No sign of a ready-made product (no brand, no legible label): the dish is
+   * assumed to be home-cooked, so branded rows are not candidates at all.
+   */
+  homemade?: boolean
 }
 
 export const WEIGHTS = {

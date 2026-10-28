@@ -39,6 +39,7 @@ export function PortionSheet({ candidate, nutritionDb, busy, onCancel, onConfirm
   const [selected, setSelected] = useState<PortionOption | null>(null)
   const [value, setValue] = useState('')
   const [loading, setLoading] = useState(true)
+  const [snap, setSnap] = useState<{ kcal: number; protein_g: number; carbs_g: number; fat_g: number } | null>(null)
   const [adding, setAdding] = useState(false)
   const [unitName, setUnitName] = useState('')
   const [unitGrams, setUnitGrams] = useState('')
@@ -59,6 +60,12 @@ export function PortionSheet({ candidate, nutritionDb, busy, onCancel, onConfirm
       ])
       if (!alive) return
       setValue(String(Math.round(defaults.grams)))
+      setSnap({
+        kcal: candidate.energyKcal ?? defaults.nutrientSnapshot.kcal,
+        protein_g: defaults.nutrientSnapshot.protein_g,
+        carbs_g: defaults.nutrientSnapshot.carbs_g,
+        fat_g: defaults.nutrientSnapshot.fat_g,
+      })
       setOptions(opts)
       setLoading(false)
     })()
@@ -69,8 +76,6 @@ export function PortionSheet({ candidate, nutritionDb, busy, onCancel, onConfirm
     const q = parsePositive(value)
     return q == null ? null : totalGrams(q, selected)
   }, [value, selected])
-
-  const kcal = grams != null && candidate.energyKcal != null ? (candidate.energyKcal * grams) / 100 : null
 
   function pick(opt: PortionOption | null) {
     setSelected(opt)
@@ -173,9 +178,24 @@ export function PortionSheet({ candidate, nutritionDb, busy, onCancel, onConfirm
                     </View>
                     <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm }]}>
                       {grams != null
-                        ? `= ${formatDecimal(grams, grams % 1 === 0 ? 0 : 1)} g${kcal != null ? ` · ${Math.round(kcal)} kcal` : ''}`
+                        ? `= ${formatDecimal(grams, grams % 1 === 0 ? 0 : 1)} g`
                         : 'Wpisz dodatnią liczbę (do 10 000 g).'}
                     </Text>
+                    {grams != null && snap ? (
+                      <View style={[styles.strip, { backgroundColor: theme.bgSunken }]}>
+                        {[
+                          { k: 'kcal', v: (snap.kcal * grams) / 100, u: 'kcal' },
+                          { k: 'W', v: (snap.carbs_g * grams) / 100, u: 'g' },
+                          { k: 'B', v: (snap.protein_g * grams) / 100, u: 'g' },
+                          { k: 'T', v: (snap.fat_g * grams) / 100, u: 'g' },
+                        ].map((c) => (
+                          <View key={c.k} style={styles.cell}>
+                            <Text style={[type.bodyStrong, { color: theme.text }]}>{formatDecimal(c.v, 1)}</Text>
+                            <Text style={[type.micro, { color: theme.textMuted }]}>{c.k === 'kcal' ? 'kcal' : `${c.k} (g)`}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
                 )}
               </>
@@ -211,6 +231,8 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.lg },
+  strip: { flexDirection: 'row', justifyContent: 'space-around', marginTop: space.md, paddingVertical: space.md, borderRadius: radius.md },
+  cell: { alignItems: 'center', gap: 2 },
   chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.pill, paddingHorizontal: space.md, justifyContent: 'center' },
   input: { paddingHorizontal: space.lg, paddingVertical: space.md, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, fontSize: 16, minHeight: 48 },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },

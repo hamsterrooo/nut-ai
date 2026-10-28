@@ -50,6 +50,7 @@ export default function FoodSearch() {
   const [selectingId, setSelectingId] = useState<string | null>(null)
   const [picked, setPicked] = useState<ScoredCandidate | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [macros, setMacros] = useState<Record<string, { p: number; c: number; f: number }>>({})
 
   useEffect(() => {
     let alive = true
@@ -90,6 +91,22 @@ export default function FoodSearch() {
     }, 180)
     return () => { alive = false; clearTimeout(timer) }
   }, [db, query])
+
+  // Short per-100 g values for every row, so a product can be judged before opening it.
+  useEffect(() => {
+    if (!db || results.length === 0) return
+    let alive = true
+    void (async () => {
+      const ids = results.map((r) => Number(r.foodId)).filter(Number.isFinite)
+      const rows = await db.all<{ id: number; p: number | null; c: number | null; f: number | null }>(
+        `SELECT id, protein_g AS p, carb_g AS c, fat_g AS f FROM foods WHERE id IN (${ids.map(() => '?').join(',')})`,
+        ids,
+      )
+      if (!alive) return
+      setMacros(Object.fromEntries(rows.map((r) => [String(r.id), { p: r.p ?? 0, c: r.c ?? 0, f: r.f ?? 0 }])))
+    })()
+    return () => { alive = false }
+  }, [db, results])
 
   async function handleSelect(candidate: ScoredCandidate, grams: number) {
     if (!db || selectingId != null) return
@@ -166,7 +183,11 @@ export default function FoodSearch() {
           <View style={{ flex: 1 }}>
             <Text style={[type.body, { color: theme.text }]} numberOfLines={2}>{r.name}</Text>
             <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-              {r.energyKcal != null ? `${Math.round(r.energyKcal)} kcal / 100 g` : 'brak danych o energii'}
+              {r.energyKcal != null ? `${formatDecimal(r.energyKcal, 0)} kcal` : 'brak danych o energii'}
+              {macros[r.foodId]
+                ? ` · W ${formatDecimal(macros[r.foodId]!.c, 1)} · B ${formatDecimal(macros[r.foodId]!.p, 1)} · T ${formatDecimal(macros[r.foodId]!.f, 1)}`
+                : ''}
+              {' / 100 g'}
               {r.brand ? ` · ${r.brand}` : ''}
             </Text>
           </View>

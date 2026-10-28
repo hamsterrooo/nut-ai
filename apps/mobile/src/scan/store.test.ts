@@ -6,6 +6,13 @@ import type { ScanResult } from '@nutai/pipeline'
 import {
   answerQuestion,
   applyWebOption,
+  clearBasket,
+  basketSize,
+  replaceRowFood,
+  restoreBasket,
+  setNote,
+  setTitle,
+  stashToBasket,
   editGrams,
   getPhase,
   removeRow,
@@ -216,5 +223,58 @@ describe('answerQuestion', () => {
     editGrams('r2', 70)
     expect(selectedAnswer(readyPhase(), 'sauce_type')).toBeNull()
     expect(readyPhase().result.meal.ingredients[1]!.grams).toBe(70)
+  })
+})
+
+describe('basket: several scans, one meal', () => {
+  it('merges parked rows into the next ready scan with unique ids and summed totals', () => {
+    readyWith([row({ id: 'item-0', grams: 100 })])
+    const first = readyPhase().result.totals.kcal
+    setTitle('Lunch')
+    stashToBasket()
+    expect(getPhase().kind).toBe('idle')
+    expect(basketSize()).toBe(1)
+
+    readyWith([row({ id: 'item-0', displayName: 'Rice', grams: 100 })])
+    const p = readyPhase()
+    expect(basketSize()).toBe(0)
+    expect(p.result.meal.ingredients).toHaveLength(2)
+    expect(new Set(p.result.meal.ingredients.map((r) => r.id)).size).toBe(2)
+    expect(p.result.items).toHaveLength(2)
+    expect(p.result.totals.kcal).toBeGreaterThan(first * 1.8)
+    expect(p.title).toBe('Lunch')
+  })
+
+  it('restoreBasket brings the parked meal back, clearBasket drops it', () => {
+    readyWith([row()])
+    stashToBasket()
+    restoreBasket()
+    expect(readyPhase().result.meal.ingredients).toHaveLength(1)
+    stashToBasket()
+    clearBasket()
+    expect(basketSize()).toBe(0)
+  })
+})
+
+describe('replaceRowFood and note', () => {
+  it('swaps the nutrition, keeps the grams and marks the row exact', () => {
+    readyWith([row({ origin: 'vision_model', isEstimate: true })])
+    replaceRowFood('r1', {
+      foodId: 7,
+      displayName: 'Lu Petitki',
+      nutrientSnapshot: { kcal: 450, protein_g: 7, fat_g: 12, carbs_g: 75, fiber_g: 2, sugar_g: 20, sodium_mg: 300 },
+    })
+    const r = readyPhase().result.meal.ingredients[0]!
+    expect(r.displayName).toBe('Lu Petitki')
+    expect(r.grams).toBe(170)
+    expect(r.origin).toBe('manual_custom')
+    expect(r.isEstimate).toBe(false)
+    expect(readyPhase().result.totals.kcal).toBeGreaterThan(700)
+  })
+
+  it('keeps the description on the ready phase', () => {
+    readyWith([row()])
+    setNote('po treningu')
+    expect(readyPhase().note).toBe('po treningu')
   })
 })

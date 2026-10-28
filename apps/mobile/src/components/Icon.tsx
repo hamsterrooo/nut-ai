@@ -31,9 +31,9 @@ export type IconName =
   | 'scan'
   | 'barcode'
   | 'nutritionLabel'
-  | 'receipt'
   | 'run'
   | 'search'
+  | 'image'
   | 'bookmark'
   | 'dumbbell'
   | 'scale'
@@ -234,12 +234,13 @@ function render(name: IconName, c: string, s: Common) {
           <Path {...s} d="m11 12.6 1.4 1.4M13.2 11l1.4 1.4" />
         </G>
       )
-    case 'receipt':
-      // A slip with a torn zigzag bottom and item lines.
+    case 'image':
+      // A photo: rounded frame, sun and a ridge line.
       return (
         <G>
-          <Path {...s} d="M6 3.5h12v15l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5v-15Z" />
-          <Path {...s} d="M9 7.5h6M9 10.5h6M9 13.5h3.5" />
+          <Rect {...s} x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+          <Circle {...s} cx="9" cy="10" r="1.6" />
+          <Path {...s} d="m4 17 5-4.5 3.5 3 2.5-2 5 4" />
         </G>
       )
     case 'search':

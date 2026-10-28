@@ -142,6 +142,10 @@ export async function resolveByText(
       continue
     }
 
+    // Home-cooked: a brand on the row means a shop-bought product. Skip those and
+    // let the next, broader rung look for a generic row instead.
+    if (ctx.homemade) rows = rows.filter((r) => !r.brand)
+
     if (rows.length === 0) continue
 
     // Same integer-vs-string coercion as loadFood — candidate ids flow straight

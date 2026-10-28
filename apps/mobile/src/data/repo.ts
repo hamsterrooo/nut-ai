@@ -367,12 +367,22 @@ export async function dayTotals(date: string): Promise<DayTotals> {
 
 export interface MealRow {
   id: number
+  /** The user's title, else the ingredient names. */
   name: string
+  note: string | null
   kcal: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
   /** Local HH:MM. */
   time: string
   /** Still being analysed, so it contributes nothing to the totals yet. */
   pending: boolean
+  /**
+   * Every ingredient came from a barcode, a label or the product database, not from
+   * a photo estimate. Precise meals are shown to 0.1; photo estimates are rounded.
+   */
+  precise: boolean
 }
 
 /** Meals of one day for the Today list, newest first. */
@@ -382,14 +392,31 @@ export async function mealsForDay(date: string): Promise<MealRow[]> {
     id: number
     logged_at: number
     analysis_status: string
+    title: string | null
+    note: string | null
     names: string | null
     kcal: number | null
+    p: number | null
+    c: number | null
+    f: number | null
+    estimates: number | null
   }>(
-    `SELECT m.id, m.logged_at, m.analysis_status,
+    `SELECT m.id, m.logged_at, m.analysis_status, m.title, m.note,
        (SELECT group_concat(display_name, ', ')
           FROM (SELECT display_name FROM log_items WHERE meal_id = m.id ORDER BY sort_order)) AS names,
        COALESCE((SELECT SUM(snap_energy_kcal * grams / 100.0) FROM log_items WHERE meal_id = m.id), 0)
-         * m.portion_eaten_fraction AS kcal
+         * m.portion_eaten_fraction AS kcal,
+       COALESCE((SELECT SUM(snap_protein_g * grams / 100.0) FROM log_items WHERE meal_id = m.id), 0)
+         * m.portion_eaten_fraction AS p,
+       COALESCE((SELECT SUM(snap_carb_g * grams / 100.0) FROM log_items WHERE meal_id = m.id), 0)
+         * m.portion_eaten_fraction AS c,
+       COALESCE((SELECT SUM(snap_fat_g * grams / 100.0) FROM log_items WHERE meal_id = m.id), 0)
+         * m.portion_eaten_fraction AS f,
+       -- A photo estimate: the model's own guess, or a database row the model's label
+       -- was matched to. Rows picked directly from the product database (meals with no
+       -- engine_id), barcodes and labels are exact.
+       (SELECT COUNT(*) FROM log_items WHERE meal_id = m.id
+          AND (portion_source = 'vision_model' OR (portion_source = 'db_search' AND m.engine_id IS NOT NULL))) AS estimates
      FROM meals m
      WHERE m.local_date = ? AND m.analysis_status IN ('complete','manual','captured','queued','analyzing')
      ORDER BY m.logged_at DESC, m.id DESC`,
@@ -401,10 +428,15 @@ export async function mealsForDay(date: string): Promise<MealRow[]> {
     const done = r.analysis_status === 'complete' || r.analysis_status === 'manual'
     return {
       id: r.id,
-      name: r.names ?? 'Posiłek',
+      name: r.title?.trim() || r.names || 'Posiłek',
+      note: r.note,
       kcal: r.kcal ?? 0,
+      protein_g: r.p ?? 0,
+      carbs_g: r.c ?? 0,
+      fat_g: r.f ?? 0,
       time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
       pending: !done,
+      precise: done && (r.estimates ?? 0) === 0,
     }
   })
 }
@@ -439,6 +471,7 @@ export async function logMeal(
   } | null,
   photoUri: string | null,
   now: number,
+  extras: { title?: string; note?: string } = {},
 ): Promise<number> {
   const h = await db()
   const date = localDate(now)
@@ -447,8 +480,8 @@ export async function logMeal(
     const meal = await tx.run(
       `INSERT INTO meals (logged_at, local_date, meal_slot, photo_uri, portion_eaten_fraction,
                           analysis_status, engine_id, prompt_version, schema_version,
-                          clamp_flags_json, created_at)
-       VALUES (?,?,?,?,?,'complete',?,?,?,?,?)`,
+                          clamp_flags_json, created_at, title, note)
+       VALUES (?,?,?,?,?,'complete',?,?,?,?,?,?,?)`,
       [
         now,
         date,
@@ -460,6 +493,8 @@ export async function logMeal(
         result.meal.schemaVersion,
         JSON.stringify(result.clampFlags ?? []),
         now,
+        extras.title?.trim() || null,
+        extras.note?.trim() || null,
       ],
     )
     const mealId = Number(meal.lastInsertRowId)

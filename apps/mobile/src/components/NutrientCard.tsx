@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { formatInteger } from '../i18n/format'
+import { formatDecimal, formatInteger } from '../i18n/format'
 import { useTheme } from '../theme/ThemeProvider'
 import { radius, space, type } from '../theme/tokens'
 import { Icon, type IconName } from './Icon'
@@ -16,6 +16,8 @@ export interface NutrientRow {
   target?: number
   /** Going over this target is worth flagging (kcal, sugar, sodium). */
   limit?: boolean
+  /** Digits after the comma. Only for exact values; estimates stay whole. */
+  decimals?: number
 }
 
 /**
@@ -40,7 +42,7 @@ export function NutrientCard({ rows }: { rows: NutrientRow[] }) {
                 <Text style={[type.body, { color: theme.text }]}>{r.label}</Text>
               </View>
               <Text style={[type.bodyStrong, { color: over ? theme.uncertain : theme.text }]}>
-                {formatInteger(r.value)}
+                {r.decimals ? formatDecimal(r.value, r.decimals) : formatInteger(r.value)}
                 {hasTarget ? (
                   <Text style={[type.caption, { color: theme.textMuted }]}>
                     {` / ${formatInteger(r.target as number)}`}

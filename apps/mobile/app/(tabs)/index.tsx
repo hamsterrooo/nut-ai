@@ -1,4 +1,4 @@
-import { formatInteger, pluralPl } from '../../src/i18n/format'
+import { formatDecimal, formatInteger, pluralPl } from '../../src/i18n/format'
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -20,6 +20,11 @@ import {
 } from '../../src/data/repo'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
+
+/** Exact meals (barcode, label, product database) show to 0.1; photo estimates are whole. */
+function amount(v: number, precise: boolean): string {
+  return precise ? formatDecimal(v, 1) : formatInteger(v)
+}
 
 const DAY_LABELS = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb']
 
@@ -194,9 +199,27 @@ export default function Home() {
                     {m.name}
                   </Text>
                   <Text style={[type.caption, { color: m.pending ? theme.uncertain : theme.textMuted, marginTop: 2 }]}>
-                    {m.time} · {m.pending ? 'w trakcie analizy, jeszcze nie liczone' : `${formatInteger(m.kcal)} kcal`}
+                    {m.pending
+                      ? `${m.time} · w trakcie analizy, jeszcze nie liczone`
+                      : `${m.time} · ${amount(m.kcal, m.precise)} kcal · W ${amount(m.carbs_g, m.precise)} g · B ${amount(m.protein_g, m.precise)} g`}
                   </Text>
+                  {m.note ? (
+                    <Text numberOfLines={2} style={[type.caption, { color: theme.textFaint, marginTop: 2 }]}>
+                      {m.note}
+                    </Text>
+                  ) : null}
                 </View>
+                {m.pending ? null : (
+                  <PressableScale
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edytuj posiłek: ${m.name}`}
+                    onPress={() => router.push({ pathname: '/edit-meal', params: { id: String(m.id) } } as never)}
+                    hitSlop={space.sm}
+                    style={[styles.ghost, { borderColor: theme.border }]}
+                  >
+                    <Text style={[type.label, { color: theme.textMuted }]}>Edytuj</Text>
+                  </PressableScale>
+                )}
                 <PressableScale
                   accessibilityRole="button"
                   accessibilityLabel={`Usuń posiłek: ${m.name}`}

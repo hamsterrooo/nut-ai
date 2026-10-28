@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics'
 import { useEffect } from 'react'
 import { Pressable, type GestureResponderEvent, type PressableProps, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, {
@@ -24,8 +25,9 @@ export function PressableScale({
   onPressIn,
   onPressOut,
   scaleTo = 0.96,
+  haptic = true,
   ...rest
-}: Omit<PressableProps, 'style'> & { style?: StyleProp<ViewStyle>; scaleTo?: number }) {
+}: Omit<PressableProps, 'style'> & { style?: StyleProp<ViewStyle>; scaleTo?: number; haptic?: boolean }) {
   const scale = useSharedValue(1)
   const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
   return (
@@ -34,6 +36,8 @@ export function PressableScale({
       style={[style, animated]}
       onPressIn={(e: GestureResponderEvent) => {
         scale.value = withTiming(scaleTo, { duration: 90, reduceMotion: ReduceMotion.System })
+        // The lightest tick iOS offers, on touch-down, so every button feels answered.
+        if (haptic && !rest.disabled) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         onPressIn?.(e)
       }}
       onPressOut={(e: GestureResponderEvent) => {

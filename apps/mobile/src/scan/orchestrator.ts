@@ -2,7 +2,6 @@ import * as ImageManipulator from 'expo-image-manipulator'
 import { SEEDED_BASELINES, type Band } from '@nutai/confidence'
 import {
   LabelPayloadZ,
-  ReceiptPayloadZ,
   VISION_WIRE_SCHEMA,
   VisionPayloadZ,
   WebLookupResultZ,
@@ -15,14 +14,13 @@ import {
   geminiWireSchema,
   openAiWireSchema,
   LABEL_SCAN_PROMPT_VERSION,
-  RECEIPT_SCAN_PROMPT_VERSION,
   type ProviderId,
 } from '@nutai/prompt'
 import { recomputeAfterEdit, runPipeline, validatePayload, type ScanResult } from '@nutai/pipeline'
 import { stampSchemaVersion } from './stamp-schema-version'
 import { openNutritionDb } from '../db/expo-adapter'
 import { loadFoodDb } from '../db/portions'
-import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup, type ScanFailure, type WebLookupOutcome } from '../inference/pathA/client'
+import { runLabelScan, runScanWithFallback, runWebLookup, type ScanFailure, type WebLookupOutcome } from '../inference/pathA/client'
 import { resolveInference, type ResolveFailure, type Resolved } from '../inference/resolve'
 import { applyWebOption, getPhase, setPhase, setWebLookup } from './store'
 import { displayNameWithBrand, lookupOffProduct } from './barcode-lookup'
@@ -49,12 +47,11 @@ const EMPTY_PRIORS: PersonalPriors = { get: () => null, containers: new Map() }
 
 /** Kept for retry, so a network blip does not re-run image preprocessing. */
 let lastCapture: { photoUri: string; base64: string } | null = null
-/** What "Spróbuj ponownie" repeats. Without this a failed label or receipt retried as a meal photo. */
-let lastRetry: { kind: 'scan' | 'label' | 'receipt'; photoUri: string } | { kind: 'barcode'; gtin: string } = { kind: 'scan', photoUri: '' }
+/** What "Spróbuj ponownie" repeats. Without this a failed label retried as a meal photo. */
+let lastRetry: { kind: 'scan' | 'label'; photoUri: string } | { kind: 'barcode'; gtin: string } = { kind: 'scan', photoUri: '' }
 
 const HEADLINE = {
   label: 'Nie udało się odczytać etykiety',
-  receipt: 'Nie udało się odczytać paragonu',
   barcode: 'Nie znaleziono produktu',
 } as const
 
@@ -98,7 +95,7 @@ function codeProp(err: ScanFailure | undefined): { code: string } | Record<strin
   return { code: err.httpStatus ? String(err.httpStatus) : err.kind }
 }
 
-function resolveFailureCopy(err: ResolveFailure, feature: 'scan' | 'label' | 'receipt'): { message: string; failureKind: 'no-key' | 'key-invalid' } {
+function resolveFailureCopy(err: ResolveFailure, feature: 'scan' | 'label'): { message: string; failureKind: 'no-key' | 'key-invalid' } {
   if (err.kind === 'key-missing') return { message: 'Brak zapisanego klucza. Wpisz go ponownie w Profilu.', failureKind: 'key-invalid' }
   const base =
     feature === 'scan'
@@ -148,7 +145,6 @@ export async function startScan(photoUri: string): Promise<void> {
 export async function retryScan(): Promise<void> {
   if (lastRetry.kind === 'barcode') return startBarcodeScan(lastRetry.gtin)
   if (lastRetry.kind === 'label') return startLabelScan(lastRetry.photoUri)
-  if (lastRetry.kind === 'receipt') return startReceiptScan(lastRetry.photoUri)
   if (!lastCapture) return
   const { photoUri, base64 } = lastCapture
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
@@ -653,130 +649,6 @@ export async function startLabelScan(photoUri: string): Promise<void> {
     'label-scan',
     LABEL_SCAN_PROMPT_VERSION,
   )
-}
-
-/**
- * Receipt mode — the meal you didn't photograph.
- *
- * The model transcribes merchant + line items off the paper; every NUMBER then
- * comes from one web lookup per item with the merchant as the brand. Items the
- * lookup cannot resolve are dropped and named in the failure copy rather than
- * logged as zeros — a silent zero-calorie Big Mac is worse than an honest gap.
- */
-const MAX_RECEIPT_ITEMS = 8
-
-export async function startReceiptScan(photoUri: string): Promise<void> {
-  lastRetry = { kind: 'receipt', photoUri }
-  setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
-
-  let base64: string
-  try {
-    base64 = await preprocess(photoUri)
-  } catch {
-    setPhase({ kind: 'failed', photoUri, headline: HEADLINE.receipt, message: 'Nie udało się odczytać zdjęcia. Zrób je ponownie.', canRetry: false })
-    return
-  }
-  lastCapture = { photoUri, base64 }
-
-  const resolved = await resolveInference()
-  if (!resolved.ok) {
-    setPhase({ kind: 'failed', photoUri, headline: HEADLINE.receipt, canRetry: false, ...resolveFailureCopy(resolved.error, 'receipt') })
-    return
-  }
-  const r = resolved.value
-
-  setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  const outcome = await runReceiptScan(r.dialect, { model: r.model, imageBase64: base64 }, r.credential)
-  if (!outcome.ok) {
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      headline: HEADLINE.receipt,
-      message: outcome.error ? outcome.error.message : 'Nie udało się odczytać paragonu.',
-      canRetry: outcome.error?.retryable ?? false,
-      failureKind: outcome.error?.kind,
-      ...codeProp(outcome.error),
-    })
-    return
-  }
-
-  const receipt = ReceiptPayloadZ.safeParse(outcome.raw)
-  if (!receipt.success || receipt.data.items.length === 0) {
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      headline: HEADLINE.receipt,
-      message: 'Na tym paragonie nie znaleziono pozycji z jedzeniem. Ułóż część z pozycjami płasko i ostro.',
-      canRetry: true,
-    })
-    return
-  }
-
-  setPhase({ kind: 'analyzing', photoUri, stage: 'matching' })
-  const merchant = receipt.data.merchant
-  const items = receipt.data.items.slice(0, MAX_RECEIPT_ITEMS)
-
-  const looked = await Promise.all(
-    items.map(async (item) => ({
-      item,
-      lookup: await webLookup(r, { itemName: item.name, brand: merchant }),
-    })),
-  )
-
-  const rows: IngredientRow[] = []
-  const webLookups: Record<string, import('./store').WebLookupState> = {}
-  const unresolved: string[] = []
-
-  for (const { item, lookup } of looked) {
-      const parsed = lookup.ok ? WebLookupResultZ.safeParse(lookup.raw) : null
-    const data = parsed?.success && parsed.data.found && parsed.data.options.length > 0 ? parsed.data : null
-    if (!data) {
-      unresolved.push(item.name)
-      continue
-    }
-    const opt = data.options[0]!
-    const grams = (opt.serving_g ?? 100) * item.quantity
-    const per100 = grams > 0 ? (100 * item.quantity) / grams : 0
-    const rowId = `row_${Date.now()}_${rows.length}`
-    rows.push({
-      id: rowId,
-      displayName: item.quantity > 1 ? `${opt.label} × ${item.quantity}` : opt.label,
-      sourceFoodId: null,
-      grams,
-      nutrientSnapshot: {
-        kcal: opt.calories_kcal * per100,
-        protein_g: opt.protein_g * per100,
-        carbs_g: opt.carbs_g * per100,
-        fat_g: opt.fat_g * per100,
-        fiber_g: opt.fiber_g == null ? null : opt.fiber_g * per100,
-        sugar_g: null,
-        sodium_mg: opt.sodium_mg == null ? null : opt.sodium_mg * per100,
-      },
-      origin: 'web_lookup',
-      sourceUrl: data.source_url,
-      gramPathway: 'packaged_exact',
-      bandHalfPct: 0.1,
-      isEstimate: false,
-      assumptions: [],
-    })
-    // Several menu variants → the question card renders under the row.
-    if (data.options.length > 1) {
-      webLookups[rowId] = { status: 'done', result: data }
-    }
-  }
-
-  if (rows.length === 0) {
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      headline: HEADLINE.receipt,
-      message: `Paragon odczytano, ale nie znaleziono wartości odżywczych dla: ${unresolved.join(', ')}. Dodaj je przez wyszukiwanie.`,
-      canRetry: false,
-    })
-    return
-  }
-
-  readyFromRows(rows, photoUri, 'receipt-scan', RECEIPT_SCAN_PROMPT_VERSION, webLookups)
 }
 
 /**

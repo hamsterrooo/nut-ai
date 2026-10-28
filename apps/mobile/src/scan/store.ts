@@ -58,6 +58,9 @@ export type ScanPhase =
       webLookups: Record<string, WebLookupState>
       /** Selected chip per question id, with the undo that restores the original estimate. */
       answers?: Answers
+      /** The user's own name and description for the meal. */
+      title?: string
+      note?: string
     }
   | {
       kind: 'failed'
@@ -90,8 +93,111 @@ export function useScan(): ScanPhase {
 }
 
 export function setPhase(next: ScanPhase) {
+  // A scan that finishes while a basket is waiting joins it: one meal, many scans.
+  if (next.kind === 'ready' && basket) {
+    next = mergeBasket(basket, next)
+    basket = null
+  }
   phase = next
   emit()
+}
+
+// ---------------------------------------------------------------------------
+// Basket: several scans, one meal.
+// ---------------------------------------------------------------------------
+
+type ReadyPhase = Extract<ScanPhase, { kind: 'ready' }>
+
+let basket: ReadyPhase | null = null
+let basketSeq = 0
+
+export function basketSize(): number {
+  return basket?.result.meal.ingredients.length ?? 0
+}
+
+/** Park the current result and free the camera for the next product. */
+export function stashToBasket() {
+  if (phase.kind !== 'ready') return
+  basket = phase
+  phase = { kind: 'idle' }
+  emit()
+}
+
+/** Bring the parked products back as the current meal (camera closed without a new scan). */
+export function restoreBasket() {
+  if (!basket) return
+  phase = basket
+  basket = null
+  emit()
+}
+
+export function clearBasket() {
+  basket = null
+}
+
+function mergeBasket(parked: ReadyPhase, next: ReadyPhase): ReadyPhase {
+  const tag = `b${++basketSeq}-`
+  const rows = parked.result.meal.ingredients.map((r) => ({ ...r, id: tag + r.id }))
+  const items = rows.map((row, i) => {
+    const original = parked.result.items[i]
+    return original
+      ? { ...original, row }
+      : { row, band: parked.bands[i]!, resolution: 'miss' as const, gramPathway: row.gramPathway }
+  })
+  const bands = [...rows.map((r, i) => parked.bands[i] ?? { halfPct: r.bandHalfPct, tier: 'moderate' as const, reasons: [] }), ...next.bands]
+  const meal: LoggedMeal = {
+    ...next.result.meal,
+    ingredients: [...rows, ...next.result.meal.ingredients],
+    portionEatenFraction: parked.result.meal.portionEatenFraction,
+  }
+  const { totals, mealBand } = recomputeAfterEdit(meal, bands)
+  return {
+    ...next,
+    bands,
+    webLookups: { ...next.webLookups },
+    result: { ...next.result, meal, items: [...items, ...next.result.items], totals, mealBand },
+    ...(parked.title ? { title: parked.title } : {}),
+    ...(parked.note ? { note: parked.note } : {}),
+  }
+}
+
+export function setTitle(title: string) {
+  if (phase.kind !== 'ready') return
+  phase = { ...phase, title }
+  emit()
+}
+
+export function setNote(note: string) {
+  if (phase.kind !== 'ready') return
+  phase = { ...phase, note }
+  emit()
+}
+
+/**
+ * Swap a row's food for a specific database product, keeping the grams. The row
+ * becomes an exact one (the user picked it), so it is shown without the AI badge.
+ */
+export function replaceRowFood(
+  rowId: string,
+  food: { foodId: number; displayName: string; nutrientSnapshot: IngredientRow['nutrientSnapshot'] },
+) {
+  mutateMeal((meal) => ({
+    ...meal,
+    ingredients: meal.ingredients.map((r) =>
+      r.id === rowId
+        ? {
+            ...r,
+            displayName: food.displayName,
+            sourceFoodId: String(food.foodId),
+            nutrientSnapshot: food.nutrientSnapshot,
+            origin: 'manual_custom' as const,
+            gramPathway: 'user_edited' as const,
+            isEstimate: false,
+            bandHalfPct: 0.1,
+          }
+        : r,
+    ),
+  }))
 }
 
 /** Non-hook read for the orchestrator (Fix Result needs the current rows). */

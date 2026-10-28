@@ -386,7 +386,7 @@ CREATE TABLE IF NOT EXISTS accuracy_baselines (
 `
 
 /** Current user-schema version. Bump with every migration added below. */
-export const USER_SCHEMA_VERSION = 3
+export const USER_SCHEMA_VERSION = 4
 
 export interface Migration {
   version: number
@@ -425,6 +425,15 @@ CREATE TABLE IF NOT EXISTS user_portions (
   created_at INTEGER NOT NULL,
   PRIMARY KEY (food_name, label)
 );
+`,
+  },
+  {
+    // A meal can carry its own name and a free-text description. Both nullable:
+    // an older meal keeps showing its ingredient names.
+    version: 4,
+    sql: `
+ALTER TABLE meals ADD COLUMN title TEXT;
+ALTER TABLE meals ADD COLUMN note TEXT;
 `,
   },
 ]

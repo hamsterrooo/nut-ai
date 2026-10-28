@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics'
 import { router } from 'expo-router'
 import { useState } from 'react'
 import {
@@ -14,12 +15,15 @@ import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { WebLookupResult } from '@nutai/core-schema'
 import type { SelectedQuestion } from '@nutai/repair'
-import { healthScore } from '@nutai/totals'
+import { healthScore, recomputeTotals } from '@nutai/totals'
 import { Icon } from '../src/components/Icon'
 import { NutrientCard } from '../src/components/NutrientCard'
+import { ProductSuggestions } from '../src/components/ProductSuggestions'
+import { useKeyboardHeight } from '../src/components/useKeyboardHeight'
 import { PressableScale, enterItem } from '../src/components/motion'
 import { logMeal } from '../src/data/repo'
 import { isAnswerable } from '../src/scan/answers'
+import { isPreciseMeal } from '../src/scan/precision'
 import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
 import {
   answerQuestion,
@@ -28,6 +32,9 @@ import {
   removeRow,
   reset,
   selectedAnswer,
+  setNote,
+  setTitle,
+  stashToBasket,
   useScan,
   type WebLookupState,
 } from '../src/scan/store'
@@ -54,6 +61,7 @@ export default function Result() {
   const [logging, setLogging] = useState(false)
   const [fixOpen, setFixOpen] = useState(false)
   const [fixText, setFixText] = useState('')
+  const kb = useKeyboardHeight()
 
   if (phase.kind === 'analyzing' || phase.kind === 'captured') {
     const stage = phase.kind === 'analyzing' ? phase.stage : 'preparing'
@@ -140,27 +148,51 @@ export default function Result() {
   const highlighted = answerable.filter((q) => q.state === 'highlighted')
   const preAnswered = answerable.filter((q) => q.state === 'pre_answered')
 
+  const names = result.meal.ingredients.map((r) => r.displayName)
+  const defaultTitle = names.length === 0 ? 'Twój posiłek' : names.length <= 2 ? names.join(', ') : `${names.slice(0, 2).join(', ')} i ${names.length - 2} więcej`
+
+  // Exact sources (barcode, label, a product picked by hand) show to 0.1; photo
+  // estimates keep whole numbers so a guess never wears a decimal.
+  const precise = isPreciseMeal(result.meal.ingredients)
+  const shown = precise ? recomputeTotals(result.meal) : result.totals
+  const dec = precise ? 1 : 0
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <ScrollView
-        contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 150 }}
         automaticallyAdjustKeyboardInsets
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[type.title, { color: theme.text }]}>
-          {result.items[0]?.row.displayName ?? 'Twój posiłek'}
-        </Text>
+        <TextInput
+          accessibilityLabel="Nazwa posiłku"
+          value={phase.title ?? ''}
+          onChangeText={setTitle}
+          placeholder={defaultTitle}
+          placeholderTextColor={theme.text}
+          returnKeyType="done"
+          style={[type.title, { color: theme.text, padding: 0 }]}
+        />
+        <TextInput
+          accessibilityLabel="Opis posiłku"
+          value={phase.note ?? ''}
+          onChangeText={setNote}
+          placeholder="Dodaj opis (opcjonalnie)"
+          placeholderTextColor={theme.textFaint}
+          multiline
+          style={[type.body, { color: theme.textMuted, marginTop: space.sm, padding: 0 }]}
+        />
 
         <View style={{ marginTop: space.xl }}>
           <NutrientCard
             rows={[
-              { key: 'kcal', label: 'Kalorie', icon: 'flame', color: theme.text, value: result.totals.kcal, unit: 'kcal' },
-              { key: 'protein', label: 'Białko', icon: 'protein', color: theme.protein, value: result.totals.protein_g, unit: 'g' },
-              { key: 'carbs', label: 'Węglowodany', icon: 'carbs', color: theme.carbs, value: result.totals.carbs_g, unit: 'g' },
-              { key: 'fat', label: 'Tłuszcz', icon: 'fat', color: theme.fat, value: result.totals.fat_g, unit: 'g' },
-              { key: 'fiber', label: 'Błonnik', icon: 'fiber', color: '#8B7BD8', value: result.totals.fiber_g, unit: 'g' },
-              { key: 'sugar', label: 'Cukry', icon: 'sugar', color: '#E88BA8', value: result.totals.sugar_g, unit: 'g' },
-              { key: 'sodium', label: 'Sód', icon: 'sodium', color: '#D6A648', value: result.totals.sodium_mg, unit: 'mg' },
+              { key: 'kcal', label: 'Kalorie', icon: 'flame', color: theme.text, value: shown.kcal, unit: 'kcal', decimals: dec },
+              { key: 'carbs', label: 'Węglowodany', icon: 'carbs', color: theme.carbs, value: shown.carbs_g, unit: 'g', decimals: dec },
+              { key: 'protein', label: 'Białko', icon: 'protein', color: theme.protein, value: shown.protein_g, unit: 'g', decimals: dec },
+              { key: 'fat', label: 'Tłuszcz', icon: 'fat', color: theme.fat, value: shown.fat_g, unit: 'g', decimals: dec },
+              { key: 'fiber', label: 'Błonnik', icon: 'fiber', color: '#8B7BD8', value: shown.fiber_g, unit: 'g', decimals: dec },
+              { key: 'sugar', label: 'Cukry', icon: 'sugar', color: '#E88BA8', value: shown.sugar_g, unit: 'g', decimals: dec },
+              { key: 'sodium', label: 'Sód', icon: 'sodium', color: '#D6A648', value: shown.sodium_mg, unit: 'mg' },
             ]}
           />
           <HealthScoreCard
@@ -208,7 +240,7 @@ export default function Result() {
                   <TextInput
                     accessibilityLabel={`Masa w gramach: ${row.displayName}`}
                     keyboardType="numeric"
-                    defaultValue={String(Math.round(row.grams))}
+                    defaultValue={String(Math.round(row.grams * 10) / 10).replace('.', ',')}
                     onChangeText={(t) => editGrams(row.id, Number(t.replace(',', '.')))}
                     style={[styles.gramInput, { color: theme.text }]}
                   />
@@ -226,13 +258,36 @@ export default function Result() {
                 </Pressable>
               </View>
 
+              {row.origin === 'vision_model' || row.origin === 'db_search' ? <ProductSuggestions row={row} /> : null}
               {lookup ? <WebLookupCard rowId={row.id} state={lookup} /> : null}
             </Animated.View>
           )
         })}
       </ScrollView>
 
-      <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, space.lg), backgroundColor: theme.bg, borderColor: theme.border }]}>
+      <View
+        style={[
+          styles.actions,
+          {
+            bottom: kb,
+            paddingBottom: kb > 0 ? space.md : Math.max(insets.bottom, space.lg),
+            backgroundColor: theme.bg,
+            borderColor: theme.border,
+          },
+        ]}
+      >
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            void Haptics.selectionAsync()
+            stashToBasket()
+            router.replace('/camera')
+          }}
+          hitSlop={space.sm}
+          style={{ alignSelf: 'center', paddingBottom: space.md }}
+        >
+          <Text style={[type.label, { color: theme.protein }]}>+ Dodaj kolejny produkt do posiłku</Text>
+        </Pressable>
         <View style={{ flexDirection: 'row', gap: space.md }}>
           <PressableScale
             accessibilityRole="button"
@@ -251,7 +306,11 @@ export default function Result() {
               setLogging(true)
               void (async () => {
                 try {
-                  await logMeal(result, phase.meta, phase.photoUri, Date.now())
+                  await logMeal(result, phase.meta, phase.photoUri, Date.now(), {
+                    title: phase.title ?? '',
+                    note: phase.note ?? '',
+                  })
+                  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
                   reset()
                   router.dismissAll()
                 } catch {
@@ -267,7 +326,7 @@ export default function Result() {
       </View>
 
       {fixOpen ? (
-        <View style={[styles.fixOverlay, { backgroundColor: theme.bg, paddingTop: insets.top + space.xl }]}>
+        <View style={[styles.fixOverlay, { backgroundColor: theme.bg, paddingTop: insets.top + space.xl, paddingBottom: kb }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
             <Icon name="pencil" size={20} color={theme.text} />
             <Text style={[type.title, { color: theme.text }]}>Popraw wynik</Text>
@@ -299,7 +358,7 @@ export default function Result() {
             }}
             style={[
               styles.primary,
-              { backgroundColor: theme.text, marginBottom: Math.max(insets.bottom, space.lg) },
+              { backgroundColor: theme.text, marginBottom: kb > 0 ? space.md : Math.max(insets.bottom, space.lg) },
               !fixText.trim() && { opacity: 0.4 },
             ]}
           >
@@ -308,7 +367,7 @@ export default function Result() {
           <Pressable
             onPress={() => setFixOpen(false)}
             hitSlop={space.md}
-            style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
+            style={{ alignSelf: 'center', marginBottom: kb > 0 ? space.md : Math.max(insets.bottom, space.lg) }}
           >
             <Text style={[type.body, { color: theme.textMuted }]}>Anuluj</Text>
           </Pressable>
@@ -358,7 +417,10 @@ function QuestionCard({
           return (
             <Pressable
               key={opt.value}
-              onPress={() => answerQuestion(q, opt.value)}
+              onPress={() => {
+                void Haptics.selectionAsync()
+                answerQuestion(q, opt.value)
+              }}
               hitSlop={space.sm}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}

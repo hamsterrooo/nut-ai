@@ -305,3 +305,52 @@ describe('multi-item meals', () => {
     expect(r!.questions.filter((q) => q.state === 'highlighted').length).toBeLessThanOrEqual(2)
   })
 })
+
+describe('implausible dish matches', () => {
+  it('a soup that matches a broth-thin row is treated as a miss, not logged at 6 kcal/100 g', async () => {
+    await db.run(
+      `INSERT INTO foods (id,source,name,prep_facet,energy_kcal,protein_g,fat_g,carb_g,serving_size_g,
+                          license,basis_confidence,completeness_score,popularity_rank)
+       VALUES (50,'off','Zupa jarzynowa',NULL,6,0.3,0.1,1,NULL,'ODbL','high',0.9,1)`,
+    )
+    await db.run('INSERT INTO food_fts (rowid,name,brand,synonyms) VALUES (50,?,?,?)', ['Zupa jarzynowa', '', ''])
+
+    const r = await runPipeline(
+      payload([item({ name: 'Zupa jarzynowa', canonical_food_key: 'zupa jarzynowa', model_gram_estimate: 400,
+        fallback_macros_at_estimate: { calories_kcal: 180, protein_g: 6, carbs_g: 24, fat_g: 6, fiber_g: 4, sodium_mg: 900 } })]),
+      deps(),
+      foodDb,
+    )
+    const only = r!.items[0]!
+    expect(only.row.sourceFoodId).not.toBe('50')
+    expect(only.row.isEstimate).toBe(true)
+  })
+})
+
+describe('home-cooked by default', () => {
+  async function addSoup(id: number, name: string, brandId: number | null, kcal: number) {
+    await db.run(
+      `INSERT INTO foods (id,source,name,brand_id,energy_kcal,protein_g,fat_g,carb_g,license,basis_confidence,completeness_score,popularity_rank)
+       VALUES (?,?,?,?,?,1.5,1,5,'ODbL','high',0.9,?)`,
+      [id, 'off', name, brandId, kcal, id],
+    )
+    await db.run('INSERT INTO food_fts (rowid,name,brand,synonyms) VALUES (?,?,?,?)', [id, name, '', ''])
+  }
+  const soup = (over: Partial<Item> = {}) =>
+    item({ name: 'Zupa jarzynowa', canonical_food_key: 'zupa jarzynowa', model_gram_estimate: 400, ...over })
+
+  it('skips shop-bought rows when nothing on the plate says ready-made', async () => {
+    await db.run(`INSERT INTO brands (id, canonical_name) VALUES (9, 'Biedronka')`)
+    await addSoup(60, 'Zupa jarzynowa', 9, 40)
+    await addSoup(61, 'Zupa jarzynowa', null, 45)
+    const r = await runPipeline(payload([soup()]), deps(), foodDb)
+    expect(r!.items[0]!.row.sourceFoodId).toBe('61')
+  })
+
+  it('still offers branded rows when the model read a brand off the packaging', async () => {
+    await db.run(`INSERT INTO brands (id, canonical_name) VALUES (9, 'Biedronka')`)
+    await addSoup(60, 'Zupa jarzynowa', 9, 40)
+    const r = await runPipeline(payload([soup({ brand: 'Biedronka' })]), deps(), foodDb)
+    expect(r!.items[0]!.row.sourceFoodId).toBe('60')
+  })
+})
