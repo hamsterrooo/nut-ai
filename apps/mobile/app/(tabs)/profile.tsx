@@ -144,13 +144,6 @@ export default function Profile() {
     >
       <Text style={[type.title, { color: theme.text }]}>Profil</Text>
 
-      <View style={[styles.hero, { backgroundColor: theme.bgSunken }]}>
-        <Text style={[type.bodyStrong, { color: theme.text }]}>No account needed</Text>
-        <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
-          Wszystko jest na tym urządzeniu. Nie ma logowania ani serwera, więc nie ma czego wykradać.
-        </Text>
-      </View>
-
       <Section title="Cele i śledzenie">
         <Row
           label="Dzienny cel"
@@ -278,7 +271,6 @@ function Line({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  hero: { marginTop: space.lg, padding: space.lg, borderRadius: radius.xl },
   group: { borderRadius: radius.xl, overflow: 'hidden' },
   row: {
     flexDirection: 'row',

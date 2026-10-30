@@ -6,9 +6,7 @@ import { ONBOARDING_DONE_KEY } from './done-key'
 import {
   activityFor,
   ageFrom,
-  featureDefaultsFor,
   inferredGoal,
-  todayEmphasisFor,
   type OnboardingAnswers,
 } from './store'
 
@@ -34,8 +32,6 @@ export async function persistOnboarding(
 
   await migrate(db, now)
 
-  const features = featureDefaultsFor(answers.blocker)
-
   await db.transaction(async (tx) => {
     await tx.run(
       `INSERT OR REPLACE INTO user_profile
@@ -50,7 +46,7 @@ export async function persistOnboarding(
         answers.heightCm,
         activityFor(answers.workoutsPerWeek),
         answers.units,
-        features.streakOn ? 1 : 0,
+        1,
         answers.provider && answers.provider !== 'none' ? 'cloud' : 'none',
         now,
       ],
@@ -90,20 +86,6 @@ export async function persistOnboarding(
     const settings: Array<[string, string]> = [
       ['diet.style', answers.dietStyle ?? 'balanced'],
       ['goal.desiredWeightKg', String(answers.desiredWeightKg ?? answers.weightKg ?? '')],
-      ['goal.blocker', answers.blocker ?? ''],
-      ['goal.accomplish', answers.accomplish ?? ''],
-      ['today.emphasis', todayEmphasisFor(answers.accomplish)],
-      ['calories.rollover', answers.rolloverCalories ? 'true' : 'false'],
-      ['calories.rolloverCapKcal', '200'],
-      ['professional.working', answers.worksWithProfessional ? 'true' : 'false'],
-      ['export.shareablePdf', answers.worksWithProfessional ? 'true' : 'false'],
-      ['coaching.suppressNudges', answers.worksWithProfessional ? 'true' : 'false'],
-      ['reminders.enabled', features.remindersOn ? 'true' : 'false'],
-      ['streak.enabled', features.streakOn ? 'true' : 'false'],
-      ['foods.savedPinned', features.savedMealsPinned ? 'true' : 'false'],
-      ['healthScore.visible', features.showHealthScore ? 'true' : 'false'],
-      ['mealIdeas.visible', features.showMealIdeas ? 'true' : 'false'],
-      ['health.intent', answers.healthConnected ? 'true' : 'false'],
       // THE canonical keys the scan orchestrator reads. The apikey screen
       // writes these on verify too; writing here as well covers the skip path
       // and keeps one vocabulary — the old inference.* mirror keys are gone.

@@ -386,7 +386,7 @@ CREATE TABLE IF NOT EXISTS accuracy_baselines (
 `
 
 /** Current user-schema version. Bump with every migration added below. */
-export const USER_SCHEMA_VERSION = 4
+export const USER_SCHEMA_VERSION = 5
 
 export interface Migration {
   version: number
@@ -434,6 +434,26 @@ CREATE TABLE IF NOT EXISTS user_portions (
     sql: `
 ALTER TABLE meals ADD COLUMN title TEXT;
 ALTER TABLE meals ADD COLUMN note TEXT;
+`,
+  },
+  {
+    // logManualFood used to store snapshots already scaled to the logged grams while
+    // the totals multiply by grams / 100 again, so every portion other than 100 g
+    // was under-counted (17 g of a 539 kcal product read as 15.6 kcal). Rows from
+    // that path (picked from the database, no engine id) go back to per 100 g.
+    version: 5,
+    sql: `
+UPDATE log_items
+   SET snap_energy_kcal = snap_energy_kcal * 100.0 / grams,
+       snap_protein_g   = snap_protein_g   * 100.0 / grams,
+       snap_fat_g       = snap_fat_g       * 100.0 / grams,
+       snap_carb_g      = snap_carb_g      * 100.0 / grams,
+       snap_fiber_g     = snap_fiber_g     * 100.0 / grams,
+       snap_sugar_g     = snap_sugar_g     * 100.0 / grams,
+       snap_sodium_mg   = snap_sodium_mg   * 100.0 / grams
+ WHERE grams > 0
+   AND portion_source = 'db_search'
+   AND meal_id IN (SELECT id FROM meals WHERE engine_id IS NULL);
 `,
   },
 ]

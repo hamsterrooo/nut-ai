@@ -11,6 +11,7 @@ import {
 import type { PersonalPriors } from '@nutai/gram-engine'
 import {
   anthropicWireSchema,
+  buildLocalSignalsBlock,
   geminiWireSchema,
   openAiWireSchema,
   LABEL_SCAN_PROMPT_VERSION,
@@ -48,7 +49,9 @@ const EMPTY_PRIORS: PersonalPriors = { get: () => null, containers: new Map() }
 /** Kept for retry, so a network blip does not re-run image preprocessing. */
 let lastCapture: { photoUri: string; base64: string } | null = null
 /** What "Spróbuj ponownie" repeats. Without this a failed label retried as a meal photo. */
-let lastRetry: { kind: 'scan' | 'label'; photoUri: string } | { kind: 'barcode'; gtin: string } = { kind: 'scan', photoUri: '' }
+let lastRetry: { kind: 'scan' | 'label'; photoUri: string } | { kind: 'barcode'; gtin: string } | { kind: 'text'; text: string } = { kind: 'scan', photoUri: '' }
+/** The description of a text scan, so Fix Result can resend it. Null for every other scan. */
+let lastText: string | null = null
 
 const HEADLINE = {
   label: 'Nie udało się odczytać etykiety',
@@ -95,14 +98,14 @@ function codeProp(err: ScanFailure | undefined): { code: string } | Record<strin
   return { code: err.httpStatus ? String(err.httpStatus) : err.kind }
 }
 
-function resolveFailureCopy(err: ResolveFailure, feature: 'scan' | 'label'): { message: string; failureKind: 'no-key' | 'key-invalid' } {
+function resolveFailureCopy(err: ResolveFailure, feature: 'scan' | 'label' | 'text'): { message: string; failureKind: 'no-key' | 'key-invalid' } {
   if (err.kind === 'key-missing') return { message: 'Brak zapisanego klucza. Wpisz go ponownie w Profilu.', failureKind: 'key-invalid' }
   const base =
     feature === 'scan'
       ? 'Skanowanie zdjęć wymaga klucza API. Dodaj go w Profilu. Kod kreskowy, wyszukiwanie i ręczne dodawanie działają bez niego.'
       : feature === 'label'
         ? 'Odczyt etykiety wymaga klucza API. Dodaj go w Profilu albo znajdź produkt po kodzie kreskowym lub w wyszukiwarce.'
-        : 'Odczyt paragonu wymaga klucza API. Dodaj go w Profilu.'
+        : 'Opis posiłku wymaga klucza API. Dodaj go w Profilu. Kod kreskowy, wyszukiwanie i ręczne dodawanie działają bez niego.'
   return { message: base, failureKind: 'no-key' }
 }
 
@@ -123,6 +126,7 @@ async function webLookup(r: Resolved, input: { itemName: string; brand: string |
 
 export async function startScan(photoUri: string): Promise<void> {
   lastRetry = { kind: 'scan', photoUri }
+  lastText = null
   setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string
@@ -145,10 +149,26 @@ export async function startScan(photoUri: string): Promise<void> {
 export async function retryScan(): Promise<void> {
   if (lastRetry.kind === 'barcode') return startBarcodeScan(lastRetry.gtin)
   if (lastRetry.kind === 'label') return startLabelScan(lastRetry.photoUri)
+  if (lastRetry.kind === 'text') return startTextScan(lastRetry.text)
   if (!lastCapture) return
   const { photoUri, base64 } = lastCapture
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
   await analyze(photoUri, base64)
+}
+
+/**
+ * A meal described in words instead of photographed. Same model, same schema and
+ * same deterministic pipeline; the only difference is that there is no image and
+ * the description rides in the user-context block.
+ */
+export async function startTextScan(text: string): Promise<void> {
+  const note = text.trim()
+  if (!note) return
+  lastRetry = { kind: 'text', text: note }
+  lastText = note
+  lastCapture = null
+  setPhase({ kind: 'analyzing', photoUri: '', stage: 'identifying' })
+  await analyze('', '', { text: note })
 }
 
 interface AnalyzeOpts {
@@ -158,6 +178,8 @@ interface AnalyzeOpts {
   priorMeta?: { inputTokens: number; outputTokens: number; costUsd: number } | null
   /** Portion fraction to carry across a fix — user answers survive re-analysis. */
   keepFraction?: number
+  /** A text scan: the meal description, sent instead of a photo. */
+  text?: string
 }
 
 async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {}): Promise<void> {
@@ -173,8 +195,9 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     provider: r.dialect,
     model: r.model,
     credential: r.credential,
-    imagesBase64: [base64],
-    localSignalsBlock: opts.fixBlock ?? '',
+    imagesBase64: opts.text ? [] : [base64],
+    localSignalsBlock: [opts.text ? buildLocalSignalsBlock({ userHint: opts.text }) : '', opts.fixBlock ?? ''].filter(Boolean).join('\n\n'),
+    ...(opts.text ? { textOnly: true } : {}),
     jsonSchema: wireSchemaFor(r.dialect),
   })
 
@@ -264,7 +287,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
 
   setPhase({
     kind: 'ready',
-    photoUri,
+    photoUri: photoUri || null,
     result,
     bands: result.items.map((i) => i.band),
     meta: {
@@ -346,7 +369,7 @@ async function refineMisses(result: ScanResult, rawPayload: unknown, r: Resolved
  */
 export async function fixScan(note: string): Promise<void> {
   const phase = getPhase()
-  if (phase.kind !== 'ready' || !lastCapture) return
+  if (phase.kind !== 'ready' || (!lastCapture && !lastText)) return
 
   const rows = phase.result.meal.ingredients
     .map((r) => `- ${r.displayName}: ${Math.round(r.grams)} g`)
@@ -362,10 +385,10 @@ export async function fixScan(note: string): Promise<void> {
 
   const keepFraction = phase.result.meal.portionEatenFraction
   const priorMeta = phase.meta
-  const photoUri = phase.photoUri ?? lastCapture.photoUri
+  const photoUri = phase.photoUri ?? lastCapture?.photoUri ?? ''
 
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  await analyze(photoUri, lastCapture.base64, { fixBlock, priorMeta, keepFraction })
+  await analyze(photoUri, lastCapture?.base64 ?? '', { fixBlock, priorMeta, keepFraction, ...(lastText ? { text: lastText } : {}) })
 }
 
 // ---------------------------------------------------------------------------
@@ -445,6 +468,7 @@ interface BarcodeFoodRow {
  */
 export async function startBarcodeScan(gtin: string): Promise<void> {
   lastRetry = { kind: 'barcode', gtin }
+  lastText = null
   setPhase({ kind: 'analyzing', photoUri: '', stage: 'matching' })
 
   let food: BarcodeFoodRow | null = null
@@ -563,6 +587,7 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
  */
 export async function startLabelScan(photoUri: string): Promise<void> {
   lastRetry = { kind: 'label', photoUri }
+  lastText = null
   setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string

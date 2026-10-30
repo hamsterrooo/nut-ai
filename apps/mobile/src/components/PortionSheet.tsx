@@ -15,8 +15,11 @@ import type { DbAdapter } from '@nutai/db-adapter'
 import type { ScoredCandidate } from '@nutai/resolver'
 import { db as userDbHandle } from '../data/repo'
 import { resolveSelection } from '../data/food-search-select'
+import type { ManualFoodSelection } from '../data/manual-food'
 import { loadPortionOptions, parsePositive, saveUserPortion, totalGrams, type PortionOption } from '../data/portion-options'
+import { saveProduct } from '../data/saved-meals'
 import { formatDecimal } from '../i18n/format'
+import { displayNameWithBrand } from '../scan/barcode-lookup'
 import { useTheme } from '../theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../theme/tokens'
 
@@ -26,6 +29,12 @@ interface Props {
   busy: boolean
   onCancel: () => void
   onConfirm: (grams: number) => void
+}
+
+/** "1 cup, chopped · 120 g"; a serving already named "45 g" is not repeated. */
+function portionChip(o: PortionOption): string {
+  const g = `${Math.round(o.grams)} g`
+  return o.label.replace(/\s/g, '') === g.replace(/\s/g, '') ? g : `${o.label} · ${g}`
 }
 
 /**
@@ -44,6 +53,8 @@ export function PortionSheet({ candidate, nutritionDb, busy, onCancel, onConfirm
   const [unitName, setUnitName] = useState('')
   const [unitGrams, setUnitGrams] = useState('')
   const [unitError, setUnitError] = useState<string | null>(null)
+  const [base, setBase] = useState<ManualFoodSelection | null>(null)
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -60,6 +71,7 @@ export function PortionSheet({ candidate, nutritionDb, busy, onCancel, onConfirm
       ])
       if (!alive) return
       setValue(String(Math.round(defaults.grams)))
+      setBase(defaults)
       setSnap({
         kcal: candidate.energyKcal ?? defaults.nutrientSnapshot.kcal,
         protein_g: defaults.nutrientSnapshot.protein_g,
@@ -101,6 +113,33 @@ export function PortionSheet({ candidate, nutritionDb, busy, onCancel, onConfirm
     }
   }
 
+  async function saveForLater() {
+    if (base == null || grams == null || saved) return
+    const n = base.nutrientSnapshot
+    try {
+      const userDb = await userDbHandle()
+      await saveProduct(
+        userDb,
+        {
+          foodId: base.foodId,
+          name: displayNameWithBrand(candidate.brand ?? null, candidate.name),
+          grams,
+          kcal: candidate.energyKcal ?? n.kcal,
+          protein: n.protein_g,
+          fat: n.fat_g,
+          carbs: n.carbs_g,
+          fiber: n.fiber_g ?? null,
+          sugar: n.sugar_g ?? null,
+          sodium: n.sodium_mg ?? null,
+        },
+        Date.now(),
+      )
+      setSaved(true)
+    } catch {
+      setSaved(false)
+    }
+  }
+
   const chip = (active: boolean) => [
     styles.chip,
     { borderColor: active ? theme.text : theme.border, backgroundColor: active ? theme.text : 'transparent', minHeight: MIN_TAP_TARGET - 8 },
@@ -128,7 +167,7 @@ export function PortionSheet({ candidate, nutritionDb, busy, onCancel, onConfirm
                   </Pressable>
                   {options.map((o) => (
                     <Pressable key={o.id} accessibilityRole="button" onPress={() => pick(o)} style={chip(selected?.id === o.id)}>
-                      <Text style={chipText(selected?.id === o.id)}>{`${o.label} · ${Math.round(o.grams)} g`}</Text>
+                      <Text style={chipText(selected?.id === o.id)}>{portionChip(o)}</Text>
                     </Pressable>
                   ))}
                   <Pressable accessibilityRole="button" onPress={() => { setAdding(true); setUnitError(null) }} style={chip(adding)}>
@@ -205,6 +244,15 @@ export function PortionSheet({ candidate, nutritionDb, busy, onCancel, onConfirm
           <View style={styles.actions}>
             <Pressable accessibilityRole="button" onPress={onCancel} hitSlop={space.md} style={{ paddingVertical: space.md }}>
               <Text style={[type.body, { color: theme.textMuted }]}>Anuluj</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={grams == null || saved}
+              onPress={() => void saveForLater()}
+              hitSlop={space.md}
+              style={{ paddingVertical: space.md, opacity: grams == null ? 0.4 : 1 }}
+            >
+              <Text style={[type.body, { color: saved ? theme.affirm : theme.protein }]}>{saved ? 'Zapisano' : 'Zapisz'}</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"

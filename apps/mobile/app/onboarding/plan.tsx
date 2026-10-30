@@ -17,13 +17,9 @@ import {
   activityFor,
   ageFrom,
   DIET_BIAS,
-  featureDefaultsFor,
   inferredGoal,
   kgToLb,
   LB_PER_KG,
-  MILK_LABEL_PL,
-  TODAY_EMPHASIS_LABEL_PL,
-  todayEmphasisFor,
   useAnswers,
 } from '../../src/onboarding/store'
 import { useTheme } from '../../src/theme/ThemeProvider'
@@ -96,7 +92,6 @@ export default function PlanScreen() {
       ? 'Cel: utrzymać wagę'
       : `Cel: ${gaining ? 'przytyć' : 'schudnąć'} ${formatDecimal(plan.deltaKg, 0)} kg do ${plan.dateLabel}`
 
-  const features = featureDefaultsFor(a.blocker)
   const diet = a.dietStyle ? DIET_BIAS[a.dietStyle] : null
 
   return (
@@ -127,9 +122,6 @@ export default function PlanScreen() {
         {/* Daily recommendation */}
         <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
           <Text style={[type.heading, { color: theme.text }]}>Twoje dzienne zalecenie</Text>
-          <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-            Możesz to zmienić w każdej chwili
-          </Text>
 
           <View style={[styles.bigCard, { backgroundColor: theme.bgElevated }]}>
             <View style={[styles.iconSq, { backgroundColor: theme.bgSunken }]}>
@@ -170,9 +162,6 @@ export default function PlanScreen() {
         {/* Where the number came from. The reference shows none of this. */}
         <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
           <Text style={[type.heading, { color: theme.text }]}>Skąd to się wzięło</Text>
-          <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-            Bez czarnej skrzynki. Sprawdź nasze rachunki.
-          </Text>
           <View style={[styles.mathCard, { backgroundColor: theme.bgElevated }]}>
             <MathRow label="BMR (Mifflin-St Jeor)" value={`${formatInteger(plan.target.bmr)} kcal`} />
             <MathRow
@@ -192,47 +181,11 @@ export default function PlanScreen() {
         {/* Your info */}
         <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
           <Text style={[type.heading, { color: theme.text }]}>Twoje dane</Text>
-          <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-            Na podstawie Twoich odpowiedzi.
-          </Text>
           <View style={[styles.mathCard, { backgroundColor: theme.bgElevated }]}>
             <InfoRow icon="person" label="Waga początkowa" value={`${formatDecimal(a.weightKg ?? 80)} kg`} />
             <InfoRow icon="target" label="Waga docelowa" value={`${formatDecimal(a.desiredWeightKg ?? a.weightKg ?? 80)} kg`} />
             <InfoRow icon="steps" label="Poziom aktywności" value={ACTIVITY_LABEL_PL[activityFor(a.workoutsPerWeek)] ?? ''} />
             {diet ? <InfoRow icon="bowl" label="Dieta" value={diet.label} /> : null}
-          </View>
-        </View>
-
-        {/* What your answers actually switched on. */}
-        <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
-          <Text style={[type.heading, { color: theme.text }]}>Co dla Ciebie ustawiliśmy</Text>
-          <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-            Na podstawie Twoich odpowiedzi. Wszystko zmienisz w Ustawieniach.
-          </Text>
-          <View style={{ marginTop: space.md, gap: space.sm }}>
-            {diet ? (
-              <Bullet text={`Dopasowania produktów uwzględniają dietę (${diet.label.toLowerCase()}), a odpowiedź domyślna na pytanie o mleko to: ${MILK_LABEL_PL[diet.defaultMilk] ?? diet.defaultMilk}.`} />
-            ) : null}
-            {features.remindersOn ? <Bullet text="Przypomnienia włączone, dopasowane do pór, o których faktycznie zapisujesz posiłki." /> : null}
-            {features.savedMealsPinned ? <Bullet text="Zapisane posiłki przypięte, żeby dodać je jednym dotknięciem." /> : null}
-            {features.showHealthScore ? <Bullet text="Ocena zdrowotności widoczna, razem z opisem wzoru." /> : null}
-            {features.showMealIdeas ? <Bullet text="Pomysły na posiłki na ekranie Dziś." /> : null}
-            {a.worksWithProfessional ? (
-              <Bullet text="Eksport do udostępnienia włączony, a własne podpowiedzi zejdą Ci z drogi." />
-            ) : null}
-            {a.rolloverCalories ? <Bullet text="Niewykorzystane kalorie przechodzą na kolejny dzień, maksymalnie 200 dziennie." /> : null}
-            <Bullet text={`Ekran Dziś na początku pokazuje: ${TODAY_EMPHASIS_LABEL_PL[todayEmphasisFor(a.accomplish)]}.`} />
-          </View>
-        </View>
-
-        {/* How to reach your goals */}
-        <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
-          <Text style={[type.heading, { color: theme.text }]}>Jak osiągnąć cele</Text>
-          <View style={{ marginTop: space.md, gap: space.sm }}>
-            <HowRow icon="scan" text="Zapisuj to, co jesz" />
-            <HowRow icon="flame" text="Trzymaj się dziennego zalecenia kalorycznego" />
-            <HowRow icon="scaleBalance" text="Zbilansuj węglowodany, białko i tłuszcze" />
-            <HowRow icon="chart" text="Patrz na trend, a nie na wynik z jednego dnia" />
           </View>
         </View>
 
@@ -309,26 +262,6 @@ function InfoRow({ icon, label, value }: { icon: IconName; label: string; value:
   )
 }
 
-function Bullet({ text }: { text: string }) {
-  const theme = useTheme()
-  return (
-    <View style={{ flexDirection: 'row', gap: space.sm }}>
-      <Text style={{ color: theme.textMuted }}>•</Text>
-      <Text style={[type.caption, { color: theme.textMuted, flex: 1, lineHeight: 19 }]}>{text}</Text>
-    </View>
-  )
-}
-
-function HowRow({ icon, text }: { icon: IconName; text: string }) {
-  const theme = useTheme()
-  return (
-    <View style={[styles.howRow, { backgroundColor: theme.bgElevated }]}>
-      <Icon name={icon} size={22} color={theme.text} />
-      <Text style={[type.bodyStrong, { color: theme.text, flex: 1 }]}>{text}</Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   check: { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   goal: {
@@ -348,10 +281,6 @@ const styles = StyleSheet.create({
   mathCard: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg, gap: space.md },
   mathRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   notice: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },
-  howRow: {
-    flexDirection: 'row', alignItems: 'center', gap: space.lg,
-    padding: space.lg, borderRadius: radius.lg,
-  },
   dock: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: space.lg, borderTopWidth: StyleSheet.hairlineWidth },
   cta: { height: 60, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
 })

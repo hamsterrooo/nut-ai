@@ -127,6 +127,8 @@ export interface BuildRequestInput {
   maxTokens?: number
   /** Proxy origin; absent means the vendor's own host. */
   baseUrl?: string
+  /** No photo: the meal is described in words in the user note. */
+  textOnly?: boolean
 }
 
 export interface ProviderRequest {
@@ -138,6 +140,13 @@ export interface ProviderRequest {
 
 const USER_INSTRUCTION =
   'Analyze the meal in the attached photo(s) and respond with only the JSON object.'
+
+const USER_INSTRUCTION_TEXT =
+  'There is no photo. The meal is described in words in the user note above. Analyze that description and respond with only the JSON object. Treat the described foods as the items, use any stated grams or household measures, set visible_reference_objects to an empty array and container to null, and state in stated_assumptions every portion you had to assume.'
+
+function instructionFor(input: BuildRequestInput): string {
+  return input.textOnly === true ? USER_INSTRUCTION_TEXT : USER_INSTRUCTION
+}
 
 /**
  * Anthropic. Two credential shapes exist and they are NOT interchangeable:
@@ -163,8 +172,8 @@ export function buildAnthropicRequest(input: BuildRequestInput, credential: { ki
     source: { type: 'base64', media_type: 'image/jpeg', data },
   }))
   const text = input.localSignalsBlock
-    ? `${input.localSignalsBlock}\n\n${USER_INSTRUCTION}`
-    : USER_INSTRUCTION
+    ? `${input.localSignalsBlock}\n\n${instructionFor(input)}`
+    : instructionFor(input)
   content.push({ type: 'text', text })
 
   return {
@@ -189,8 +198,8 @@ export function buildOpenAIRequest(input: BuildRequestInput, apiKey: string): Pr
     image_url: { url: `data:image/jpeg;base64,${data}` },
   }))
   const text = input.localSignalsBlock
-    ? `${input.localSignalsBlock}\n\n${USER_INSTRUCTION}`
-    : USER_INSTRUCTION
+    ? `${input.localSignalsBlock}\n\n${instructionFor(input)}`
+    : instructionFor(input)
   content.unshift({ type: 'text', text })
 
   return {
@@ -221,8 +230,8 @@ export function buildGeminiRequest(input: BuildRequestInput, apiKey: string): Pr
     inline_data: { mime_type: 'image/jpeg', data },
   }))
   const text = input.localSignalsBlock
-    ? `${input.localSignalsBlock}\n\n${USER_INSTRUCTION}`
-    : USER_INSTRUCTION
+    ? `${input.localSignalsBlock}\n\n${instructionFor(input)}`
+    : instructionFor(input)
   parts.push({ text })
 
   return {
@@ -234,7 +243,7 @@ export function buildGeminiRequest(input: BuildRequestInput, apiKey: string): Pr
       generationConfig: {
         responseMimeType: 'application/json',
         ...(input.jsonSchema == null ? {} : { responseSchema: input.jsonSchema }),
-        maxOutputTokens: input.maxTokens ?? 4096,
+        maxOutputTokens: input.maxTokens ?? 8192,
       },
     },
     promptVersion: PROMPT_VERSION,

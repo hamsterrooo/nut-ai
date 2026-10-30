@@ -3,9 +3,11 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { IngredientPicker } from '../src/components/IngredientPicker'
 import { useKeyboardHeight } from '../src/components/useKeyboardHeight'
 import { db, deleteMeal } from '../src/data/repo'
-import { loadMealDetail, saveMealEdit, type MealDetail } from '../src/data/meal-edit'
+import type { ManualFoodSelection } from '../src/data/manual-food'
+import { loadMealDetail, saveMealEdit, type MealDetail, type Snapshot } from '../src/data/meal-edit'
 import { formatDecimal } from '../src/i18n/format'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
@@ -32,6 +34,9 @@ export default function EditMeal() {
   const [note, setNote] = useState('')
   const [grams, setGrams] = useState<Record<number, string>>({})
   const [removed, setRemoved] = useState<number[]>([])
+  const [swaps, setSwaps] = useState<Record<number, Snapshot>>({})
+  const [added, setAdded] = useState<Array<Snapshot & { key: number; grams: string }>>([])
+  const [picker, setPicker] = useState<number | 'new' | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -63,15 +68,45 @@ export default function EditMeal() {
     for (const i of detail.items) {
       if (removed.includes(i.id)) continue
       const g = parsed(i.id, i.grams) / 100
-      kcal += i.kcalPer100 * g
-      c += i.carbsPer100 * g
-      p += i.proteinPer100 * g
-      f += i.fatPer100 * g
+      const s = swaps[i.id]
+      kcal += (s ? s.kcal : i.kcalPer100) * g
+      c += (s ? s.carbs : i.carbsPer100) * g
+      p += (s ? s.protein : i.proteinPer100) * g
+      f += (s ? s.fat : i.fatPer100) * g
+    }
+    for (const a of added) {
+      const n = Number(a.grams.replace(',', '.'))
+      const g = (Number.isFinite(n) && n > 0 ? n : 0) / 100
+      kcal += a.kcal * g
+      c += a.carbs * g
+      p += a.protein * g
+      f += a.fat * g
     }
     const k = detail.portionEaten
     return { kcal: kcal * k, c: c * k, p: p * k, f: f * k }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detail, grams, removed])
+  }, [detail, grams, removed, swaps, added])
+
+  function onPicked(sel: ManualFoodSelection) {
+    const n = sel.nutrientSnapshot
+    const snap: Snapshot = {
+      foodId: sel.foodId,
+      name: sel.displayName,
+      kcal: n.kcal,
+      protein: n.protein_g,
+      fat: n.fat_g,
+      carbs: n.carbs_g,
+      fiber: n.fiber_g ?? null,
+      sugar: n.sugar_g ?? null,
+      sodium: n.sodium_mg ?? null,
+    }
+    if (picker === 'new') {
+      setAdded((list) => [...list, { ...snap, key: Date.now(), grams: String(Math.round(sel.grams)) }])
+    } else if (typeof picker === 'number') {
+      setSwaps((s) => ({ ...s, [picker]: snap }))
+    }
+    setPicker(null)
+  }
 
   async function save() {
     if (!detail || saving) return
@@ -79,7 +114,7 @@ export default function EditMeal() {
     try {
       const handle = await db()
       const remaining = detail.items.filter((i) => !removed.includes(i.id))
-      if (remaining.length === 0) {
+      if (remaining.length === 0 && added.length === 0) {
         await deleteMeal(detail.id)
       } else {
         await saveMealEdit(handle, detail.id, {
@@ -87,6 +122,11 @@ export default function EditMeal() {
           note,
           grams: Object.fromEntries(remaining.map((i) => [i.id, parsed(i.id, i.grams)])),
           remove: removed,
+          replace: Object.fromEntries(Object.entries(swaps).filter(([id]) => !removed.includes(Number(id)))),
+          add: added.map(({ key: _key, grams: g, ...snap }) => ({
+            ...snap,
+            grams: Number(g.replace(',', '.')),
+          })),
         })
       }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
@@ -151,10 +191,15 @@ export default function EditMeal() {
           .filter((i) => !removed.includes(i.id))
           .map((i) => (
             <View key={i.id} style={[styles.row, { borderColor: theme.border }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[type.body, { color: theme.text }]}>{i.name}</Text>
-                <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>dodano {clock(i.addedAt)}</Text>
-              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Zmień produkt: ${i.name}`}
+                onPress={() => setPicker(i.id)}
+                style={{ flex: 1 }}
+              >
+                <Text style={[type.body, { color: theme.text }]}>{swaps[i.id]?.name ?? i.name}</Text>
+                <Text style={[type.micro, { color: theme.protein, marginTop: 2 }]}>Zmień produkt</Text>
+              </Pressable>
               <View style={[styles.gramBox, { borderColor: theme.border }]}>
                 <TextInput
                   accessibilityLabel={`Masa w gramach: ${i.name}`}
@@ -176,7 +221,50 @@ export default function EditMeal() {
               </Pressable>
             </View>
           ))}
+        {added.map((a) => (
+          <View key={a.key} style={[styles.row, { borderColor: theme.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[type.body, { color: theme.text }]}>{a.name}</Text>
+              <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>nowy składnik</Text>
+            </View>
+            <View style={[styles.gramBox, { borderColor: theme.border }]}>
+              <TextInput
+                accessibilityLabel={`Masa w gramach: ${a.name}`}
+                keyboardType="numeric"
+                value={a.grams}
+                onChangeText={(t) => setAdded((list) => list.map((x) => (x.key === a.key ? { ...x, grams: t } : x)))}
+                style={[styles.gramInput, { color: theme.text }]}
+              />
+              <Text style={[type.caption, { color: theme.textMuted }]}>g</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Usuń ${a.name}`}
+              onPress={() => setAdded((list) => list.filter((x) => x.key !== a.key))}
+              hitSlop={space.md}
+              style={styles.remove}
+            >
+              <Text style={{ color: theme.textFaint, fontSize: 20 }}>×</Text>
+            </Pressable>
+          </View>
+        ))}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setPicker('new')}
+          hitSlop={space.md}
+          style={{ marginTop: space.lg, alignSelf: 'flex-start' }}
+        >
+          <Text style={[type.label, { color: theme.protein }]}>+ Dodaj składnik</Text>
+        </Pressable>
       </ScrollView>
+
+      {picker != null ? (
+        <IngredientPicker
+          title={picker === 'new' ? 'Dodaj składnik' : 'Zmień produkt'}
+          onPick={onPicked}
+          onClose={() => setPicker(null)}
+        />
+      ) : null}
 
       <View
         style={[

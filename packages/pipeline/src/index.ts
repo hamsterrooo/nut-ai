@@ -239,13 +239,15 @@ export async function runPipeline(
     }
 
     const isMiss = food == null
-    const snapshot = food ? snapshotFrom(food) : snapshotFromFallback(item, gram.grams)
+    // A photo estimate is never shown with decimals: they would claim precision it lacks.
+    const grams = resolution === 'barcode' ? gram.grams : wholeGrams(gram.grams)
+    const snapshot = food ? snapshotFrom(food) : snapshotFromFallback(item, grams)
 
     const row: IngredientRow = {
       id: `item-${index}`,
       displayName: item.name,
       sourceFoodId: food?.foodId ?? null,
-      grams: gram.grams,
+      grams,
       nutrientSnapshot: snapshot,
       origin: resolution === 'barcode' ? 'barcode' : isMiss ? 'vision_model' : 'db_search',
       gramPathway: gram.pathway,
@@ -288,7 +290,7 @@ export async function runPipeline(
           id: `item-${index}-oil`,
           displayName: 'Olej do smażenia (wchłonięty)',
           sourceFoodId: null,
-          grams: gram.addedOilGrams,
+          grams: wholeGrams(gram.addedOilGrams),
           // Per 100 g of vegetable oil.
           nutrientSnapshot: { kcal: 884, protein_g: 0, fat_g: 100, carbs_g: 0, fiber_g: 0, sodium_mg: 0 },
           origin: 'assumption_filler',
@@ -342,6 +344,11 @@ export async function runPipeline(
     clampFlags: flags,
     zeroHitCount,
   }
+}
+
+/** Whole grams, except below 10 g where one decimal keeps a pinch of spice from becoming zero. */
+function wholeGrams(g: number): number {
+  return g < 10 ? Math.round(g * 10) / 10 : Math.round(g)
 }
 
 function prepFacetFor(item: Item): string | null {

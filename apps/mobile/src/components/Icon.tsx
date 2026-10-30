@@ -115,41 +115,36 @@ function render(name: IconName, c: string, s: Common) {
         />
       )
     case 'protein':
-      // A drumstick: meat mass plus the bone.
-      return (
-        <G>
-          <Path {...s} d="M15.6 4.2a4.6 4.6 0 0 1 1.3 7.1l-5.5 5.5-3.9-3.9 5.5-5.5a4.6 4.6 0 0 1 2.6-3.2Z" />
-          <Path {...s} d="m7.5 12.9-2.1 2.1a2 2 0 1 0 1.3 3.3 2 2 0 1 0 3.3 1.3l2.1-2.1" />
-        </G>
-      )
+      // An egg.
+      return <Path {...s} d="M12 3c3.6 0 6.2 5.6 6.2 9.6a6.2 6.2 0 0 1-12.4 0C5.8 8.6 8.4 3 12 3Z" />
     case 'carbs':
-      // A wheat sheaf.
+      // A slice of bread.
       return (
-        <G>
-          <Path {...s} d="M12 21V9" />
-          <Path {...s} d="M12 9c0-2 1.3-3.6 3-4 .3 1.9-.8 3.6-3 4Z" />
-          <Path {...s} d="M12 9c0-2-1.3-3.6-3-4-.3 1.9.8 3.6 3 4Z" />
-          <Path {...s} d="M12 14c0-2 1.3-3.6 3-4 .3 1.9-.8 3.6-3 4Z" />
-          <Path {...s} d="M12 14c0-2-1.3-3.6-3-4-.3 1.9.8 3.6 3 4Z" />
-        </G>
+        <Path {...s} d="M6 10.5A3.5 3.5 0 0 1 7.5 4h9A3.5 3.5 0 0 1 18 10.5V18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-7.5Z" />
       )
     case 'fat':
-      // A droplet.
-      return <Path {...s} d="M12 3.5c3 3.6 5.5 6.3 5.5 9.3a5.5 5.5 0 0 1-11 0c0-3 2.5-5.7 5.5-9.3Z" />
-    case 'fiber':
+      // A wedge of cheese.
       return (
         <G>
-          <Path {...s} d="M12 21c0-5 2.5-8.5 7-10-.5 5.5-3 9-7 10Z" />
-          <Path {...s} d="M12 21c0-4-2-7-6-8.5.4 4.5 2.4 7.5 6 8.5Z" />
-          <Path {...s} d="M12 21v-6" />
+          <Path {...s} d="M3 15.5 21 8.5V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1.5Z" />
+          <Circle {...s} cx="9" cy="16.5" r="1" />
+          <Circle {...s} cx="15" cy="14.5" r="1.2" />
+        </G>
+      )
+    case 'fiber':
+      // A leaf.
+      return (
+        <G>
+          <Path {...s} d="M20 4C10 4 4.5 8 4.5 14.5A5.5 5.5 0 0 0 10 20c6.5 0 10-5.5 10-16Z" />
+          <Path {...s} d="M18 6C13 9 10 13 8.5 19" />
         </G>
       )
     case 'sugar':
-      // A sugar cube in isometric.
+      // A wrapped candy.
       return (
         <G>
-          <Path {...s} d="M12 3 4 7v10l8 4 8-4V7l-8-4Z" />
-          <Path {...s} d="m4 7 8 4 8-4M12 11v10" />
+          <Circle {...s} cx="12" cy="12" r="4.2" />
+          <Path {...s} d="M7.9 10.2 3.5 8v8l4.4-2.2M16.1 10.2 20.5 8v8l-4.4-2.2" />
         </G>
       )
     case 'sodium':

@@ -15,8 +15,9 @@ import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { WebLookupResult } from '@nutai/core-schema'
 import type { SelectedQuestion } from '@nutai/repair'
-import { healthScore, recomputeTotals } from '@nutai/totals'
+import { recomputeTotals } from '@nutai/totals'
 import { Icon } from '../src/components/Icon'
+import { MacroLine } from '../src/components/MacroLine'
 import { NutrientCard } from '../src/components/NutrientCard'
 import { ProductSuggestions } from '../src/components/ProductSuggestions'
 import { useKeyboardHeight } from '../src/components/useKeyboardHeight'
@@ -73,7 +74,7 @@ export default function Result() {
           : 'Dopasowywanie do bazy żywieniowej…'
     return (
       <View style={[styles.center, { backgroundColor: theme.bg }]}>
-        <Image source={{ uri: phase.photoUri }} style={styles.photo} />
+        {phase.photoUri !== '' ? <Image source={{ uri: phase.photoUri }} style={styles.photo} /> : null}
         <ActivityIndicator color={theme.textMuted} style={{ marginTop: space.xl }} />
         <Text style={[type.heading, { color: theme.text, marginTop: space.md }]}>{copy}</Text>
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, textAlign: 'center' }]}>
@@ -144,7 +145,15 @@ export default function Result() {
   const { result } = phase
   // Only questions whose answer changes the numbers are shown. A chip that does
   // nothing (no sauce row to scale, no handler yet) is hidden rather than faked.
-  const answerable = result.questions.filter((q) => isAnswerable(q.question.id, result.meal))
+  // One card per question: a multi-item meal produces the same meal-level question
+  // (portion, oil) once per item, and a highlighted copy beats a pre-answered one.
+  const byId = new Map<string, SelectedQuestion>()
+  for (const q of result.questions) {
+    if (!isAnswerable(q.question.id, result.meal)) continue
+    const prev = byId.get(q.question.id)
+    if (!prev || (prev.state !== 'highlighted' && q.state === 'highlighted')) byId.set(q.question.id, q)
+  }
+  const answerable = [...byId.values()]
   const highlighted = answerable.filter((q) => q.state === 'highlighted')
   const preAnswered = answerable.filter((q) => q.state === 'pre_answered')
 
@@ -195,10 +204,6 @@ export default function Result() {
               { key: 'sodium', label: 'Sód', icon: 'sodium', color: '#D6A648', value: shown.sodium_mg, unit: 'mg' },
             ]}
           />
-          <HealthScoreCard
-            totals={result.totals}
-            grams={result.meal.ingredients.reduce((a, r) => a + r.grams, 0)}
-          />
         </View>
 
         {/* Highlighted questions: at most two, ever. */}
@@ -220,11 +225,12 @@ export default function Result() {
         <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Składniki</Text>
 
         {result.meal.ingredients.map((row, idx) => {
-          const item = result.items.find((i) => i.row.id === row.id)
           const lookup = phase.webLookups[row.id]
+          const f = row.grams / 100
+          const s = row.nutrientSnapshot
           return (
-            <Animated.View key={row.id} entering={enterItem(idx)}>
-              <View style={[styles.row, { borderColor: theme.border }]}>
+            <Animated.View key={row.id} entering={enterItem(idx)} style={[styles.ingCard, { backgroundColor: theme.bgSunken }]}>
+              <View style={styles.ingRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[type.body, { color: theme.text }]}>{row.displayName}</Text>
                   {row.origin === 'web_lookup' && row.sourceUrl ? (
@@ -257,6 +263,12 @@ export default function Result() {
                   <Text style={{ color: theme.textFaint, fontSize: 20 }}>×</Text>
                 </Pressable>
               </View>
+              <MacroLine
+                lead={`${Math.round(s.kcal * f)} kcal`}
+                carbs={s.carbs_g * f}
+                protein={s.protein_g * f}
+                fat={s.fat_g * f}
+              />
 
               {row.origin === 'vision_model' || row.origin === 'db_search' ? <ProductSuggestions row={row} /> : null}
               {lookup ? <WebLookupCard rowId={row.id} state={lookup} /> : null}
@@ -535,46 +547,9 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
   )
 }
 
-/**
- * The score is arithmetic from @nutai/totals: tap it and every point shows its
- * named rule. Hidden when there is nothing to score.
- */
-function HealthScoreCard({ totals, grams }: { totals: Parameters<typeof healthScore>[0]; grams: number }) {
-  const theme = useTheme()
-  const [showWhy, setShowWhy] = useState(false)
-  const hs = healthScore(totals, grams > 0 ? grams : undefined)
-  if (!hs) return null
-
-  return (
-    <Pressable onPress={() => setShowWhy((v) => !v)} style={[styles.healthCard, { backgroundColor: theme.bgSunken }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <Icon name="heart" size={18} color={theme.protein} />
-        <Text style={[type.bodyStrong, { color: theme.text, flex: 1 }]}>Ocena zdrowotności</Text>
-        <Text style={[type.bodyStrong, { color: theme.text }]}>{hs.score}/10</Text>
-      </View>
-      <View style={[styles.healthTrack, { backgroundColor: theme.bgElevated }]}>
-        <View style={[styles.healthFill, { width: `${hs.score * 10}%` as const, backgroundColor: theme.affirm }]} />
-      </View>
-      {showWhy &&
-        hs.reasons.map((r) => (
-          <Text key={r} style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
-            · {r}
-          </Text>
-        ))}
-      {showWhy && (
-        <Text style={[type.micro, { color: theme.textFaint, marginTop: space.sm }]}>
-          Obliczone stałymi regułami z tych sum, nigdy przez AI.
-        </Text>
-      )}
-    </Pressable>
-  )
-}
-
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl },
-  healthCard: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },
-  healthTrack: { height: 6, borderRadius: 3, marginTop: space.md, overflow: 'hidden' },
-  healthFill: { height: 6, borderRadius: 3 },
+  ingCard: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg },
   secondary: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -606,13 +581,7 @@ const styles = StyleSheet.create({
     minHeight: 36,
     justifyContent: 'center',
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingVertical: space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+  ingRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   gramBox: {
     flexDirection: 'row',
     alignItems: 'center',

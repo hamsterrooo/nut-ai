@@ -17,7 +17,8 @@ type CameraMode = 'food' | 'barcode' | 'label'
 
 const SHORTCUTS: Array<{ label: string; short: string; icon: IconName; route: string }> = [
   { label: 'Baza produktów', short: 'Baza', icon: 'search', route: '/food-search' },
-  { label: 'Zapisane produkty', short: 'Zapisane', icon: 'bookmark', route: '/saved-foods' },
+  { label: 'Historia i zapisane', short: 'Historia', icon: 'clock', route: '/history' },
+  { label: 'Opisz posiłek', short: 'Opisz', icon: 'pencil', route: '/describe-meal' },
 ]
 
 const MODES: Array<{ id: CameraMode; label: string; icon: IconName }> = [
@@ -36,7 +37,6 @@ const ZOOM_STEPS: Array<{ label: string; ultra?: boolean; zoom: number }> = [
   { label: '0,5×', ultra: true, zoom: 0 },
   { label: '1×', zoom: 0 },
   { label: '2×', zoom: 0.15 },
-  { label: '3×', zoom: 0.24 },
 ]
 
 /**

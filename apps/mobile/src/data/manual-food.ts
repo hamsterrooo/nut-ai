@@ -5,9 +5,9 @@ import { localDate, slotFor } from './date-utils'
 /**
  * A food picked directly off the Food Database search screen — no photo, no
  * model call. `nutrientSnapshot` is the resolved row's real per-100 g values;
- * `logManualFood` scales them to `grams` and copies the result in at log
- * time, exactly like every other logging path, so a later corpus rebuild can
- * never move a historical log's numbers.
+ * `logManualFood` copies them in UNSCALED at log time, exactly like every other
+ * logging path (the totals multiply by grams / 100 themselves), so a later
+ * corpus rebuild can never move a historical log's numbers.
  *
  * This takes its `DbAdapter` as a parameter rather than reaching for repo.ts's
  * cached app singleton — same shape as `backup-core.ts` — specifically so it
@@ -26,9 +26,7 @@ export interface ManualFoodSelection {
 
 export async function logManualFood(h: DbAdapter, selection: ManualFoodSelection, now: number): Promise<number> {
   const date = localDate(now)
-  const scale = selection.grams / 100
   const n = selection.nutrientSnapshot
-  const scaled = (v: number | null | undefined) => (v == null ? null : v * scale)
 
   return h.transaction(async (tx) => {
     const meal = await tx.run(
@@ -52,13 +50,13 @@ export async function logManualFood(h: DbAdapter, selection: ManualFoodSelection
         selection.grams,
         'fndds_standard_portion',
         'db_search',
-        scaled(n.kcal),
-        scaled(n.protein_g),
-        scaled(n.fat_g),
-        scaled(n.carbs_g),
-        scaled(n.fiber_g),
-        scaled(n.sugar_g),
-        scaled(n.sodium_mg),
+        n.kcal,
+        n.protein_g,
+        n.fat_g,
+        n.carbs_g,
+        n.fiber_g ?? null,
+        n.sugar_g ?? null,
+        n.sodium_mg ?? null,
         now,
       ],
     )

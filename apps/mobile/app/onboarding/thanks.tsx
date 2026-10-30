@@ -24,16 +24,6 @@ export default function ThanksScreen() {
         <Text style={[type.body, { color: theme.textMuted, textAlign: 'center', marginTop: space.md }]}>
           Teraz spersonalizujemy Nut AI dla Ciebie...
         </Text>
-
-        <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
-          <Text style={[type.bodyStrong, { color: theme.text, textAlign: 'center' }]}>
-            Dopasowane do Twoich celów
-          </Text>
-          <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center', marginTop: space.xs }]}>
-            Twoje odpowiedzi ustalają Twoje cele, wpływają na dopasowywanie produktów i decydują,
-            które części aplikacji są włączone.
-          </Text>
-        </View>
       </View>
     </OnboardingScreen>
   )
@@ -48,5 +38,4 @@ const styles = StyleSheet.create({
     fontSize: 32, lineHeight: 40, fontWeight: '800', letterSpacing: -1,
     textAlign: 'center', marginTop: space.xl,
   },
-  card: { marginTop: space.xl, padding: space.lg, borderRadius: radius.lg, width: '100%' },
 })

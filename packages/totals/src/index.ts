@@ -230,5 +230,3 @@ export const labelRounding = {
     return Math.round(pct / 10) * 10
   },
 } as const
-
-export * from './health-score.js'

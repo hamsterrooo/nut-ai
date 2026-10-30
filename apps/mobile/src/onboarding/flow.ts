@@ -18,19 +18,14 @@ export const FLOW = [
   // 'trend' sits after the weights so its curve can follow the real direction.
   // The reference draws a decline unconditionally, which is wrong for a bulk.
   'trend',
-  'professional',
   'potential',
-  'blocker',
   'diet',
-  'accomplish',
-  'rollover',
   // Path A setup. Placed after the plan-shaping questions and before first
   // camera use, so the named destination is consented to before any photo could
   // leave the device.
   'provider',
   'apikey',
   'thanks',
-  'notifications',
   'generate',
 ] as const
 

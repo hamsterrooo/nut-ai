@@ -77,6 +77,8 @@ export interface ScanRequest {
   timeoutMs?: number
   /** Proxy origin; absent means the vendor's own host. */
   baseUrl?: string
+  /** No photo: the meal is described in the local-signals block. */
+  textOnly?: boolean
 }
 
 const DEFAULT_TIMEOUT_MS = 45_000
@@ -117,14 +119,33 @@ function classify(status: number, body: string): ScanFailure {
   return { kind: 'error-retryable', message: `Nieoczekiwana odpowiedź dostawcy (${status}). ${errorDetail(body)}`.trim(), retryable: true, httpStatus: status }
 }
 
+/** JSON out of model text: tolerates code fences and prose around the object. */
+function parseJsonText(text: unknown): unknown {
+  if (typeof text !== 'string') return text ?? null
+  const fenced = text.replace(/```(?:json)?/g, '').trim()
+  try {
+    return JSON.parse(fenced)
+  } catch {
+    /* fall through to the outermost braces */
+  }
+  const start = fenced.indexOf('{')
+  const end = fenced.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
+  try {
+    return JSON.parse(fenced.slice(start, end + 1))
+  } catch {
+    return null
+  }
+}
+
 /** Pull the JSON payload out of each provider's differently-shaped envelope. */
 function extractPayload(provider: ProviderId, json: unknown): { raw: unknown; inputTokens: number; outputTokens: number } | null {
   const j = json as Record<string, any>
   try {
     if (provider === 'anthropic') {
-      const text = j.content?.[0]?.text
+      const text = (j.content ?? []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
       return {
-        raw: typeof text === 'string' ? JSON.parse(text) : text,
+        raw: parseJsonText(text),
         inputTokens: j.usage?.input_tokens ?? 0,
         outputTokens: j.usage?.output_tokens ?? 0,
       }
@@ -132,14 +153,14 @@ function extractPayload(provider: ProviderId, json: unknown): { raw: unknown; in
     if (provider === 'openai') {
       const text = j.choices?.[0]?.message?.content
       return {
-        raw: typeof text === 'string' ? JSON.parse(text) : text,
+        raw: parseJsonText(text),
         inputTokens: j.usage?.prompt_tokens ?? 0,
         outputTokens: j.usage?.completion_tokens ?? 0,
       }
     }
-    const text = j.candidates?.[0]?.content?.parts?.[0]?.text
+    const text = (j.candidates?.[0]?.content?.parts ?? []).filter((p: any) => !p?.thought).map((p: any) => p?.text ?? '').join('')
     return {
-      raw: typeof text === 'string' ? JSON.parse(text) : text,
+      raw: parseJsonText(text),
       inputTokens: j.usageMetadata?.promptTokenCount ?? 0,
       outputTokens: j.usageMetadata?.candidatesTokenCount ?? 0,
     }
@@ -155,6 +176,7 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
     localSignalsBlock: req.localSignalsBlock,
     jsonSchema: req.jsonSchema,
     ...(req.baseUrl ? { baseUrl: req.baseUrl } : {}),
+    ...(req.textOnly ? { textOnly: true } : {}),
   }
 
   const built =
@@ -188,7 +210,10 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
 
     const extracted = extractPayload(req.provider, json)
     if (!extracted || extracted.raw == null) {
-      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca zwrócił nieoczekiwany format odpowiedzi.', retryable: false } }
+      const j = json as Record<string, any>
+      const reason = j?.candidates?.[0]?.finishReason ?? j?.stop_reason ?? j?.choices?.[0]?.finish_reason
+      const note = reason ? ` (${String(reason)})` : ''
+      return { ok: false, error: { kind: 'schema-violation', message: `Dostawca zwrócił nieoczekiwany format odpowiedzi${note}. Spróbuj ponownie.`, retryable: true } }
     }
 
     return {

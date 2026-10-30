@@ -4,9 +4,11 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '../../src/components/Icon'
+import { MacroLine } from '../../src/components/MacroLine'
 import { PressableScale } from '../../src/components/motion'
 import { NutrientCard } from '../../src/components/NutrientCard'
 import {
+  db,
   currentGoal,
   dayTotals,
   deleteMeal,
@@ -18,6 +20,7 @@ import {
   type DayTotals,
   type MealRow,
 } from '../../src/data/repo'
+import { mergeMeals } from '../../src/data/meal-edit'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
 
@@ -51,14 +54,23 @@ export default function Home() {
   const [adaptive, setAdaptive] = useState<AdaptiveOutcome | null>(null)
   const [offset, setOffset] = useState(0)
   const [meals, setMeals] = useState<MealRow[]>([])
+  const [selecting, setSelecting] = useState(false)
+  const [picked, setPicked] = useState<number[]>([])
   const scrollRef = useRef<ScrollView>(null)
+  // Set just before opening a modal from this screen, so closing it does not
+  // throw the list back to the top.
+  const keepScroll = useRef(false)
 
   const selected = useMemo(() => Date.now() + offset * 86_400_000, [offset])
 
-  // Reset scroll position on every tab focus. expo-router keeps tab screens
-  // mounted, so without this the scroll offset survives switching away and back.
+  // Reset scroll position when coming back from another tab. expo-router keeps tab
+  // screens mounted; a modal opened from here sets keepScroll and is skipped.
   useFocusEffect(
     useCallback(() => {
+      if (keepScroll.current) {
+        keepScroll.current = false
+        return
+      }
       scrollRef.current?.scrollTo({ y: 0, animated: false })
     }, []),
   )
@@ -105,6 +117,18 @@ export default function Home() {
     ])
   }
 
+  function toggle(id: number) {
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+  }
+
+  async function merge() {
+    if (picked.length < 2) return
+    await mergeMeals(await db(), picked)
+    setSelecting(false)
+    setPicked([])
+    await reloadDay()
+  }
+
   if (!goal || !totals) {
     return (
       <View style={[styles.center, { backgroundColor: theme.bg }]}>
@@ -145,30 +169,20 @@ export default function Home() {
         />
       </View>
 
-      {/* Adaptive target status — always legible, never a silent change. */}
-      <View style={{ paddingHorizontal: space.lg, marginTop: space.lg }}>
-        <View style={[styles.card, { backgroundColor: theme.bgSunken, borderColor: 'transparent' }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-            <Icon name="target" size={18} color={theme.text} />
-            <Text style={[type.bodyStrong, { color: theme.text }]}>Twój cel</Text>
+      {/* Shown only when the adaptive loop actually moved the target: never a silent change. */}
+      {adaptive?.surfaced ? (
+        <View style={{ paddingHorizontal: space.lg, marginTop: space.lg }}>
+          <View style={[styles.card, { backgroundColor: theme.bgSunken, borderColor: 'transparent' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+              <Icon name="target" size={18} color={theme.text} />
+              <Text style={[type.bodyStrong, { color: theme.text }]}>Twój cel</Text>
+            </View>
+            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
+              {`Zaktualizowano do ${formatInteger(adaptive.newKcal ?? 0)} kcal. ${adaptive.explanation}`}
+            </Text>
           </View>
-          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
-            {adaptive?.surfaced
-              ? `Zaktualizowano do ${formatInteger(adaptive.newKcal ?? 0)} kcal. ${adaptive.explanation}`
-              : goal.adaptive
-                ? (adaptive?.reason ?? 'Dostosowuje się do Twojego trendu i spożycia.')
-                : 'Stały: ustawiono go ręcznie, więc go nie ruszamy.'}
-          </Text>
-          <Pressable
-            onPress={() => router.push('/log-weight' as never)}
-            hitSlop={space.sm}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.md }}
-          >
-            <Icon name="scale" size={16} color={theme.protein} />
-            <Text style={[type.label, { color: theme.protein }]}>Zapisz dzisiejszą wagę</Text>
-          </Pressable>
         </View>
-      </View>
+      ) : null}
 
       {/* Recently uploaded */}
       <View style={{ paddingHorizontal: space.lg, marginTop: space.xl }}>
@@ -189,47 +203,102 @@ export default function Home() {
           </View>
         ) : (
           <View style={{ marginTop: space.md, gap: space.sm }}>
-            <Text style={[type.caption, { color: theme.textMuted }]}>
-              Zapisano: {totals.mealCount} {pluralPl(totals.mealCount, 'posiłek', 'posiłki', 'posiłków')}
-            </Text>
+            <View style={styles.listHead}>
+              <Text style={[type.caption, { color: theme.textMuted }]}>
+                Zapisano: {totals.mealCount} {pluralPl(totals.mealCount, 'posiłek', 'posiłki', 'posiłków')}
+              </Text>
+              {selecting ? (
+                <View style={{ flexDirection: 'row', gap: space.lg }}>
+                  <Pressable
+                    onPress={() => {
+                      setSelecting(false)
+                      setPicked([])
+                    }}
+                    hitSlop={space.sm}
+                  >
+                    <Text style={[type.label, { color: theme.textMuted }]}>Anuluj</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={picked.length < 2}
+                    onPress={() => void merge()}
+                    hitSlop={space.sm}
+                    style={{ opacity: picked.length < 2 ? 0.4 : 1 }}
+                  >
+                    <Text style={[type.label, { color: theme.protein }]}>Połącz ({picked.length})</Text>
+                  </Pressable>
+                </View>
+              ) : meals.filter((m) => !m.pending).length > 1 ? (
+                <Pressable onPress={() => setSelecting(true)} hitSlop={space.sm}>
+                  <Text style={[type.label, { color: theme.protein }]}>Połącz w jeden posiłek</Text>
+                </Pressable>
+              ) : null}
+            </View>
             {meals.map((m) => (
-              <View key={m.id} style={[styles.mealRow, { backgroundColor: theme.bgSunken }]}>
+              <Pressable
+                key={m.id}
+                disabled={!selecting || m.pending}
+                onPress={() => toggle(m.id)}
+                style={[styles.mealRow, { backgroundColor: theme.bgSunken }]}
+              >
+                {selecting && !m.pending ? (
+                  <View
+                    style={[
+                      styles.checkbox,
+                      { borderColor: theme.text, backgroundColor: picked.includes(m.id) ? theme.text : 'transparent' },
+                    ]}
+                  >
+                    {picked.includes(m.id) ? <Icon name="check" size={14} color={theme.bg} weight={2.4} /> : null}
+                  </View>
+                ) : null}
                 <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={[type.bodyStrong, { color: theme.text }]}>
+                  <Text numberOfLines={2} style={[type.bodyStrong, { color: theme.text }]}>
                     {m.name}
                   </Text>
-                  <Text style={[type.caption, { color: m.pending ? theme.uncertain : theme.textMuted, marginTop: 2 }]}>
-                    {m.pending
-                      ? `${m.time} · w trakcie analizy, jeszcze nie liczone`
-                      : `${m.time} · ${amount(m.kcal, m.precise)} kcal · W ${amount(m.carbs_g, m.precise)} g · B ${amount(m.protein_g, m.precise)} g`}
-                  </Text>
+                  {m.pending ? (
+                    <Text style={[type.caption, { color: theme.uncertain, marginTop: 2 }]}>
+                      {`${m.time} · w trakcie analizy, jeszcze nie liczone`}
+                    </Text>
+                  ) : (
+                    <MacroLine
+                      lead={`${m.time} · ${amount(m.kcal, m.precise)} kcal`}
+                      carbs={m.carbs_g}
+                      protein={m.protein_g}
+                      fat={m.fat_g}
+                      decimals={m.precise ? 1 : 0}
+                    />
+                  )}
                   {m.note ? (
                     <Text numberOfLines={2} style={[type.caption, { color: theme.textFaint, marginTop: 2 }]}>
                       {m.note}
                     </Text>
                   ) : null}
                 </View>
-                {m.pending ? null : (
+                {m.pending || selecting ? null : (
                   <PressableScale
                     accessibilityRole="button"
                     accessibilityLabel={`Edytuj posiłek: ${m.name}`}
-                    onPress={() => router.push({ pathname: '/edit-meal', params: { id: String(m.id) } } as never)}
+                    onPress={() => {
+                      keepScroll.current = true
+                      router.push({ pathname: '/edit-meal', params: { id: String(m.id) } } as never)
+                    }}
                     hitSlop={space.sm}
                     style={[styles.ghost, { borderColor: theme.border }]}
                   >
                     <Text style={[type.label, { color: theme.textMuted }]}>Edytuj</Text>
                   </PressableScale>
                 )}
-                <PressableScale
-                  accessibilityRole="button"
-                  accessibilityLabel={`Usuń posiłek: ${m.name}`}
-                  onPress={() => confirmDelete(m)}
-                  hitSlop={space.sm}
-                  style={[styles.ghost, { borderColor: theme.border }]}
-                >
-                  <Text style={[type.label, { color: theme.textMuted }]}>Usuń</Text>
-                </PressableScale>
-              </View>
+                {selecting ? null : (
+                  <PressableScale
+                    accessibilityRole="button"
+                    accessibilityLabel={`Usuń posiłek: ${m.name}`}
+                    onPress={() => confirmDelete(m)}
+                    hitSlop={space.sm}
+                    style={[styles.ghost, { borderColor: theme.border }]}
+                  >
+                    <Text style={[type.label, { color: theme.textMuted }]}>Usuń</Text>
+                  </PressableScale>
+                )}
+              </Pressable>
             ))}
           </View>
         )}
@@ -299,10 +368,9 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: radius.pill, borderWidth: 1.5,
     alignItems: 'center', justifyContent: 'center',
   },
-  mid: { fontSize: 26, fontWeight: '800', letterSpacing: -0.8 },
   card: { padding: space.lg, borderRadius: radius.xl, borderWidth: StyleSheet.hairlineWidth },
-  spread: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  scoreTrack: { height: 8, borderRadius: 4, marginTop: space.md },
+  listHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   ghost: {
     paddingHorizontal: space.lg, paddingVertical: space.sm,
     borderRadius: radius.pill, borderWidth: StyleSheet.hairlineWidth,

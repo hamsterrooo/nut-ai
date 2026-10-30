@@ -22,11 +22,6 @@ import type { ProviderId } from '@nutai/prompt'
  *                                           not resolve to a beef row, and the
  *                                           oil/milk assumption-filler defaults
  *                                           change with the diet.
- *   blocker                              -> which retention surfaces default ON
- *   accomplish                           -> what the Today screen leads with
- *   worksWithProfessional                -> suppresses coaching nudges and turns
- *                                           on the dietitian-friendly PDF export
- *   rolloverCalories                     -> a real daily-target behaviour
  *
  * If a field is ever added here without a consumer, delete the screen instead.
  */
@@ -43,15 +38,6 @@ export type DietStyle =
   | 'vegetarian'
   | 'vegan'
 
-export type Blocker =
-  | 'consistency'
-  | 'eating_habits'
-  | 'support'
-  | 'busy'
-  | 'meal_inspiration'
-
-export type Accomplish = 'healthier' | 'energy' | 'motivated' | 'body_image'
-
 export interface OnboardingAnswers {
   sex: Sex | null
   workoutsPerWeek: WorkoutFrequency | null
@@ -61,14 +47,9 @@ export interface OnboardingAnswers {
   heightCm: number | null
   weightKg: number | null
   units: UnitSystem
-  worksWithProfessional: boolean | null
   goal: Goal | null
   desiredWeightKg: number | null
-  blocker: Blocker | null
   dietStyle: DietStyle | null
-  accomplish: Accomplish | null
-  rolloverCalories: boolean | null
-  healthConnected: boolean
   /**
    * A vendor is the user's own key; 'none' means no cloud path — barcode,
    * search and manual still work.
@@ -86,14 +67,9 @@ const EMPTY: OnboardingAnswers = {
   heightCm: null,
   weightKg: null,
   units: 'metric',
-  worksWithProfessional: null,
   goal: null,
   desiredWeightKg: null,
-  blocker: null,
   dietStyle: null,
-  accomplish: null,
-  rolloverCalories: null,
-  healthConnected: false,
   provider: undefined,
   providerModel: null,
 }
@@ -226,72 +202,6 @@ export const ACTIVITY_LABEL_PL: Record<string, string> = {
   moderate: 'umiarkowana aktywność',
   active: 'wysoka aktywność',
   very_active: 'bardzo wysoka aktywność',
-}
-
-export const MILK_LABEL_PL: Record<string, string> = {
-  whole: 'pełne',
-  oat: 'owsiane',
-}
-
-export const TODAY_EMPHASIS_LABEL_PL = {
-  calories: 'kalorie',
-  protein: 'białko',
-  streak: 'serię dni',
-  neutral: 'neutralny widok',
-} as const
-
-/** Which retention surfaces default ON, driven by the stated blocker. */
-export interface FeatureDefaults {
-  remindersOn: boolean
-  streakOn: boolean
-  savedMealsPinned: boolean
-  showHealthScore: boolean
-  showMealIdeas: boolean
-}
-
-export function featureDefaultsFor(b: Blocker | null): FeatureDefaults {
-  const base: FeatureDefaults = {
-    remindersOn: false,
-    streakOn: true,
-    savedMealsPinned: false,
-    showHealthScore: false,
-    showMealIdeas: false,
-  }
-  switch (b) {
-    case 'consistency':
-      return { ...base, remindersOn: true, streakOn: true }
-    case 'eating_habits':
-      return { ...base, showHealthScore: true }
-    case 'busy':
-      // Someone short on time gets one-tap relogging front and centre.
-      return { ...base, savedMealsPinned: true }
-    case 'meal_inspiration':
-      return { ...base, showMealIdeas: true }
-    case 'support':
-      // No social feed exists to offer, so this becomes the one honest thing we
-      // can do: make the export easy to hand to a real person.
-      return { ...base, remindersOn: true }
-    default:
-      return base
-  }
-}
-
-/** What the Today screen leads with. */
-export function todayEmphasisFor(a: Accomplish | null): 'calories' | 'protein' | 'streak' | 'neutral' {
-  switch (a) {
-    case 'healthier':
-      return 'calories'
-    case 'energy':
-      return 'protein'
-    case 'motivated':
-      return 'streak'
-    case 'body_image':
-      // Deliberately the least body-focused surface for the most body-focused
-      // answer. Someone who says this is the user gap-1 warns about hardest.
-      return 'neutral'
-    default:
-      return 'calories'
-  }
 }
 
 /**
