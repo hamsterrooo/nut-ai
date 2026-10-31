@@ -8,6 +8,9 @@ import { Icon } from './Icon'
  * The short nutrient line under a meal or an ingredient: an optional lead text
  * (time, kcal), then carbs, protein and fat as a coloured icon plus grams.
  * No letter labels: the colour and the icon carry the meaning.
+ *
+ * Always one line. Values shrink to fit instead of wrapping, so a row never grows
+ * a second line of numbers.
  */
 export function MacroLine({
   lead,
@@ -30,11 +33,25 @@ export function MacroLine({
   ]
   return (
     <View style={styles.row}>
-      {lead ? <Text style={[type.caption, { color: theme.textMuted }]}>{lead}</Text> : null}
+      {lead ? (
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+          style={[type.caption, styles.lead, { color: theme.textMuted }]}
+        >
+          {lead}
+        </Text>
+      ) : null}
       {items.map((m) => (
         <View key={m.icon} style={styles.item}>
           <Icon name={m.icon} size={13} color={m.c} />
-          <Text style={[type.caption, { color: m.c, fontWeight: '600' }]}>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            style={[type.caption, { color: m.c, fontWeight: '600' }]}
+          >
             {formatDecimal(m.v, decimals)} g
           </Text>
         </View>
@@ -44,6 +61,7 @@ export function MacroLine({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.md, rowGap: 2, marginTop: 2 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  row: { flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', columnGap: space.sm, marginTop: 2 },
+  lead: { flexShrink: 1 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 1 },
 })

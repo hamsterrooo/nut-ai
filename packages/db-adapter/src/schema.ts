@@ -386,7 +386,7 @@ CREATE TABLE IF NOT EXISTS accuracy_baselines (
 `
 
 /** Current user-schema version. Bump with every migration added below. */
-export const USER_SCHEMA_VERSION = 5
+export const USER_SCHEMA_VERSION = 6
 
 export interface Migration {
   version: number
@@ -454,6 +454,16 @@ UPDATE log_items
  WHERE grams > 0
    AND portion_source = 'db_search'
    AND meal_id IN (SELECT id FROM meals WHERE engine_id IS NULL);
+`,
+  },
+  {
+    // Groups: meals the user chose to show together. Every scan or search stays its own
+    // meal; group_id is the id of the earliest member (NULL = not grouped). No separate
+    // table: ungrouping is clearing the column, and nothing else depends on it.
+    version: 6,
+    sql: `
+ALTER TABLE meals ADD COLUMN group_id INTEGER;
+CREATE INDEX IF NOT EXISTS idx_meals_group ON meals(group_id);
 `,
   },
 ]

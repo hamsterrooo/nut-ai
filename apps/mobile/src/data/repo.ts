@@ -22,6 +22,7 @@ import { ONBOARDING_DONE_KEY } from '../onboarding/done-key'
 import { inferredGoal } from '../onboarding/store'
 import { EXPORT_TABLES, WIPE_ONLY_TABLES } from './backup-core'
 import { localDate, slotFor } from './date-utils'
+import { dissolveIfAlone } from './meal-edit'
 import { clearCredential } from '../inference/credentials'
 import { openUserDb } from '../db/expo-adapter'
 
@@ -367,6 +368,8 @@ export async function dayTotals(date: string): Promise<DayTotals> {
 
 export interface MealRow {
   id: number
+  /** Set when the user grouped this meal with others; the same value for every member. */
+  groupId: number | null
   /** The user's title, else the ingredient names. */
   name: string
   note: string | null
@@ -390,6 +393,7 @@ export async function mealsForDay(date: string): Promise<MealRow[]> {
   const h = await db()
   const rows = await h.all<{
     id: number
+    group_id: number | null
     logged_at: number
     analysis_status: string
     title: string | null
@@ -401,7 +405,7 @@ export async function mealsForDay(date: string): Promise<MealRow[]> {
     f: number | null
     estimates: number | null
   }>(
-    `SELECT m.id, m.logged_at, m.analysis_status, m.title, m.note,
+    `SELECT m.id, m.group_id, m.logged_at, m.analysis_status, m.title, m.note,
        (SELECT group_concat(display_name, ', ')
           FROM (SELECT display_name FROM log_items WHERE meal_id = m.id ORDER BY sort_order)) AS names,
        COALESCE((SELECT SUM(snap_energy_kcal * grams / 100.0) FROM log_items WHERE meal_id = m.id), 0)
@@ -428,6 +432,7 @@ export async function mealsForDay(date: string): Promise<MealRow[]> {
     const done = r.analysis_status === 'complete' || r.analysis_status === 'manual'
     return {
       id: r.id,
+      groupId: r.group_id,
       name: r.title?.trim() || r.names || 'Posiłek',
       note: r.note,
       kcal: r.kcal ?? 0,
@@ -449,8 +454,12 @@ export async function mealsForDay(date: string): Promise<MealRow[]> {
 export async function deleteMeal(id: number): Promise<void> {
   const h = await db()
   await h.transaction(async (tx) => {
+    const m = await tx.get<{ group_id: number | null }>('SELECT group_id FROM meals WHERE id = ?', [id])
     await tx.run('DELETE FROM log_items WHERE meal_id = ?', [id])
     await tx.run('DELETE FROM meals WHERE id = ?', [id])
+    // A group of one is just a meal. If the group id was the deleted meal's own id,
+    // the survivors keep it: the id only has to be shared, not point at a live row.
+    if (m?.group_id != null) await dissolveIfAlone(tx, m.group_id)
   })
 }
 

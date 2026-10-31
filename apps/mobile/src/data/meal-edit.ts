@@ -146,55 +146,65 @@ export async function saveMealEdit(h: DbAdapter, id: number, edit: MealEdit): Pr
 }
 
 /**
- * Merge several logged meals into the earliest one.
+ * Group logged meals so they show (and total) together. Nothing is merged: every
+ * meal keeps its own ingredients, portion fraction, title and time, and ungrouping
+ * gives back exactly what was there.
  *
- * Totals must not move, and each meal carries its own portion_eaten_fraction, so a
- * fraction other than 1 is folded into the grams of that meal's items first and the
- * merged meal is set to 1. Pending meals are ignored. Returns the surviving meal id,
- * or null when fewer than two mergeable meals were given.
+ * The group id is the id of the earliest member. Meals already in a group pull that
+ * whole group in, so grouping A+B with an existing group {C,D} gives {A,B,C,D}.
+ * Pending meals are ignored. Returns the group id, or null when fewer than two
+ * groupable meals were given.
  */
-export async function mergeMeals(h: DbAdapter, ids: number[]): Promise<number | null> {
+export async function groupMeals(h: DbAdapter, ids: number[]): Promise<number | null> {
   const unique = [...new Set(ids)]
   if (unique.length < 2) return null
   return h.transaction(async (tx) => {
     const marks = unique.map(() => '?').join(',')
-    const meals = await tx.all<{
-      id: number
-      title: string | null
-      note: string | null
-      portion_eaten_fraction: number
-    }>(
-      `SELECT id, title, note, portion_eaten_fraction FROM meals
+    const picked = await tx.all<{ id: number; group_id: number | null }>(
+      `SELECT id, group_id FROM meals
        WHERE id IN (${marks}) AND analysis_status IN ('complete','manual')
        ORDER BY logged_at, id`,
       unique,
     )
-    if (meals.length < 2) return null
-    const target = meals[0]!
+    if (picked.length < 2) return null
 
-    for (const m of meals) {
-      if (m.portion_eaten_fraction !== 1) {
-        await tx.run('UPDATE log_items SET grams = grams * ? WHERE meal_id = ?', [m.portion_eaten_fraction, m.id])
-      }
+    const oldGroups = [...new Set(picked.map((m) => m.group_id).filter((g): g is number => g != null))]
+    const members = new Set<number>(picked.map((m) => m.id))
+    for (const g of oldGroups) {
+      const rows = await tx.all<{ id: number }>('SELECT id FROM meals WHERE group_id = ?', [g])
+      for (const r of rows) members.add(r.id)
     }
-    for (const m of meals.slice(1)) {
-      const max = await tx.get<{ m: number | null }>('SELECT MAX(sort_order) AS m FROM log_items WHERE meal_id = ?', [target.id])
-      await tx.run('UPDATE log_items SET meal_id = ?, sort_order = sort_order + ? WHERE meal_id = ?', [
-        target.id,
-        (max?.m ?? -1) + 1,
-        m.id,
-      ])
-      await tx.run('UPDATE scan_cost_ledger SET meal_id = ? WHERE meal_id = ?', [target.id, m.id])
-      await tx.run('DELETE FROM meals WHERE id = ?', [m.id])
-    }
-
-    const title = meals.find((m) => m.title?.trim())?.title ?? null
-    const note = meals.map((m) => m.note?.trim()).filter(Boolean).join('\n') || null
-    await tx.run('UPDATE meals SET portion_eaten_fraction = 1.0, title = ?, note = ? WHERE id = ?', [
-      title,
-      note,
-      target.id,
-    ])
-    return target.id
+    const all = [...members]
+    const first = await tx.get<{ id: number }>(
+      `SELECT id FROM meals WHERE id IN (${all.map(() => '?').join(',')}) ORDER BY logged_at, id LIMIT 1`,
+      all,
+    )
+    const gid = first!.id
+    await tx.run(`UPDATE meals SET group_id = ? WHERE id IN (${all.map(() => '?').join(',')})`, [gid, ...all])
+    return gid
   })
+}
+
+/** Dissolve a whole group. The meals are untouched. */
+export async function ungroup(h: DbAdapter, groupId: number): Promise<void> {
+  await h.run('UPDATE meals SET group_id = NULL WHERE group_id = ?', [groupId])
+}
+
+/**
+ * Take one meal out of its group. A group left with a single meal is dissolved: a
+ * group of one is just a meal.
+ */
+export async function removeFromGroup(h: DbAdapter, mealId: number): Promise<void> {
+  await h.transaction(async (tx) => {
+    const m = await tx.get<{ group_id: number | null }>('SELECT group_id FROM meals WHERE id = ?', [mealId])
+    if (!m || m.group_id == null) return
+    await tx.run('UPDATE meals SET group_id = NULL WHERE id = ?', [mealId])
+    await dissolveIfAlone(tx, m.group_id)
+  })
+}
+
+/** Clears a group that has fewer than two members left. Call after a member is removed. */
+export async function dissolveIfAlone(h: DbAdapter, groupId: number): Promise<void> {
+  const n = await h.get<{ c: number }>('SELECT COUNT(*) AS c FROM meals WHERE group_id = ?', [groupId])
+  if ((n?.c ?? 0) < 2) await h.run('UPDATE meals SET group_id = NULL WHERE group_id = ?', [groupId])
 }

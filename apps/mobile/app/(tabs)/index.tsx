@@ -20,7 +20,7 @@ import {
   type DayTotals,
   type MealRow,
 } from '../../src/data/repo'
-import { mergeMeals } from '../../src/data/meal-edit'
+import { groupMeals, removeFromGroup, ungroup } from '../../src/data/meal-edit'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
 
@@ -30,6 +30,30 @@ function amount(v: number, precise: boolean): string {
 }
 
 const DAY_LABELS = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb']
+
+type Entry = { kind: 'meal'; meal: MealRow } | { kind: 'group'; id: number; members: MealRow[] }
+
+/**
+ * Meals in list order, with the members of a group collected under one entry placed
+ * where the newest member is. A group seen with fewer than two members on this day
+ * (the others are on another day) is shown as plain meals.
+ */
+function buildEntries(meals: MealRow[]): Entry[] {
+  const out: Entry[] = []
+  const seen = new Set<number>()
+  for (const m of meals) {
+    const gid = m.groupId
+    const members = gid == null || m.pending ? [] : meals.filter((x) => x.groupId === gid && !x.pending)
+    if (gid == null || members.length < 2) {
+      out.push({ kind: 'meal', meal: m })
+      continue
+    }
+    if (seen.has(gid)) continue
+    seen.add(gid)
+    out.push({ kind: 'group', id: gid, members })
+  }
+  return out
+}
 
 /**
  * Home.
@@ -56,6 +80,7 @@ export default function Home() {
   const [meals, setMeals] = useState<MealRow[]>([])
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<number[]>([])
+  const [open, setOpen] = useState<number[]>([])
   const scrollRef = useRef<ScrollView>(null)
   // Set just before opening a modal from this screen, so closing it does not
   // throw the list back to the top.
@@ -121,12 +146,164 @@ export default function Home() {
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
   }
 
-  async function merge() {
+  async function group() {
     if (picked.length < 2) return
-    await mergeMeals(await db(), picked)
+    const gid = await groupMeals(await db(), picked)
     setSelecting(false)
     setPicked([])
+    if (gid != null) setOpen((o) => (o.includes(gid) ? o : [...o, gid]))
     await reloadDay()
+  }
+
+  function toggleGroup(id: number) {
+    setOpen((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id]))
+  }
+
+  async function dissolve(id: number) {
+    await ungroup(await db(), id)
+    await reloadDay()
+  }
+
+  async function takeOut(mealId: number) {
+    await removeFromGroup(await db(), mealId)
+    await reloadDay()
+  }
+
+  /** One meal row. `nested` rows sit inside a group card: no background of their own, plus "Wyjmij". */
+  function renderMeal(m: MealRow, nested: boolean) {
+    const selectable = selecting && !m.pending && !nested && m.groupId == null
+    return (
+      <Pressable
+        key={m.id}
+        disabled={m.pending || nested}
+        onPress={() => (selectable ? toggle(m.id) : undefined)}
+        onLongPress={() => {
+          if (selecting || m.pending || nested || m.groupId != null) return
+          setSelecting(true)
+          setPicked([m.id])
+        }}
+        style={[styles.mealRow, nested ? styles.nestedRow : { backgroundColor: theme.bgSunken }]}
+      >
+        <View style={styles.mealTop}>
+          {selectable ? (
+            <View
+              style={[
+                styles.checkbox,
+                { borderColor: theme.text, backgroundColor: picked.includes(m.id) ? theme.text : 'transparent' },
+              ]}
+            >
+              {picked.includes(m.id) ? <Icon name="check" size={14} color={theme.bg} weight={2.4} /> : null}
+            </View>
+          ) : null}
+          <Text numberOfLines={2} style={[type.bodyStrong, styles.mealName, { color: theme.text }]}>
+            {m.name}
+          </Text>
+          {m.pending || selecting ? null : (
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={`Edytuj posiłek: ${m.name}`}
+              onPress={() => {
+                keepScroll.current = true
+                router.push({ pathname: '/edit-meal', params: { id: String(m.id) } } as never)
+              }}
+              hitSlop={space.sm}
+              style={[styles.ghost, { borderColor: theme.border }]}
+            >
+              <Text style={[type.label, { color: theme.textMuted }]}>Edytuj</Text>
+            </PressableScale>
+          )}
+          {selecting ? null : (
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={`Usuń posiłek: ${m.name}`}
+              onPress={() => confirmDelete(m)}
+              hitSlop={space.sm}
+              style={[styles.ghost, { borderColor: theme.border }]}
+            >
+              <Text style={[type.label, { color: theme.textMuted }]}>Usuń</Text>
+            </PressableScale>
+          )}
+        </View>
+        {/* Full width under the name and buttons, so the numbers always fit on one line. */}
+        {m.pending ? (
+          <Text style={[type.caption, { color: theme.uncertain }]}>
+            {`${m.time} · w trakcie analizy, jeszcze nie liczone`}
+          </Text>
+        ) : (
+          <MacroLine
+            lead={`${m.time} · ${amount(m.kcal, m.precise)} kcal`}
+            carbs={m.carbs_g}
+            protein={m.protein_g}
+            fat={m.fat_g}
+            decimals={m.precise ? 1 : 0}
+          />
+        )}
+        {m.note ? (
+          <Text numberOfLines={2} style={[type.caption, { color: theme.textFaint }]}>
+            {m.note}
+          </Text>
+        ) : null}
+        {nested && !selecting ? (
+          <Pressable onPress={() => void takeOut(m.id)} hitSlop={space.sm} style={{ alignSelf: 'flex-start' }}>
+            <Text style={[type.caption, { color: theme.textMuted, textDecorationLine: 'underline' }]}>
+              Wyjmij z grupy
+            </Text>
+          </Pressable>
+        ) : null}
+      </Pressable>
+    )
+  }
+
+  function renderGroup(id: number, members: MealRow[]) {
+    const isOpen = open.includes(id)
+    const sum = (f: (m: MealRow) => number) => members.reduce((a, m) => a + f(m), 0)
+    const precise = members.every((m) => m.precise)
+    const earliest = members.reduce((a, m) => (m.time < a ? m.time : a), members[0]!.time)
+    return (
+      <View
+        key={`g${id}`}
+        style={[styles.groupCard, { backgroundColor: theme.bgSunken, opacity: selecting ? 0.45 : 1 }]}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: isOpen }}
+          disabled={selecting}
+          onPress={() => toggleGroup(id)}
+          style={styles.groupHead}
+        >
+          <View style={styles.mealTop}>
+            <Text numberOfLines={1} style={[type.bodyStrong, styles.mealName, { color: theme.text }]}>
+              {`Grupa · ${members.length} ${pluralPl(members.length, 'posiłek', 'posiłki', 'posiłków')}`}
+            </Text>
+            <Text style={[type.label, { color: theme.textMuted }]}>{isOpen ? 'Zwiń' : 'Rozwiń'}</Text>
+            {selecting ? null : (
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityLabel="Rozgrupuj"
+                onPress={() => void dissolve(id)}
+                hitSlop={space.sm}
+                style={[styles.ghost, { borderColor: theme.border }]}
+              >
+                <Text style={[type.label, { color: theme.textMuted }]}>Rozgrupuj</Text>
+              </PressableScale>
+            )}
+          </View>
+          <MacroLine
+            lead={`${earliest} · ${amount(sum((m) => m.kcal), precise)} kcal`}
+            carbs={sum((m) => m.carbs_g)}
+            protein={sum((m) => m.protein_g)}
+            fat={sum((m) => m.fat_g)}
+            decimals={precise ? 1 : 0}
+          />
+          {isOpen ? null : (
+            <Text numberOfLines={1} style={[type.caption, { color: theme.textFaint }]}>
+              {members.map((m) => m.name).join(', ')}
+            </Text>
+          )}
+        </Pressable>
+        {isOpen ? <View style={{ gap: space.sm, marginTop: space.sm }}>{members.map((m) => renderMeal(m, true))}</View> : null}
+      </View>
+    )
   }
 
   if (!goal || !totals) {
@@ -220,86 +397,20 @@ export default function Home() {
                   </Pressable>
                   <Pressable
                     disabled={picked.length < 2}
-                    onPress={() => void merge()}
+                    onPress={() => void group()}
                     hitSlop={space.sm}
                     style={{ opacity: picked.length < 2 ? 0.4 : 1 }}
                   >
-                    <Text style={[type.label, { color: theme.protein }]}>Połącz ({picked.length})</Text>
+                    <Text style={[type.label, { color: theme.protein }]}>Grupuj ({picked.length})</Text>
                   </Pressable>
                 </View>
-              ) : meals.filter((m) => !m.pending).length > 1 ? (
+              ) : meals.filter((m) => !m.pending && m.groupId == null).length > 1 ? (
                 <Pressable onPress={() => setSelecting(true)} hitSlop={space.sm}>
-                  <Text style={[type.label, { color: theme.protein }]}>Połącz w jeden posiłek</Text>
+                  <Text style={[type.label, { color: theme.protein }]}>Grupuj posiłki</Text>
                 </Pressable>
               ) : null}
             </View>
-            {meals.map((m) => (
-              <Pressable
-                key={m.id}
-                disabled={!selecting || m.pending}
-                onPress={() => toggle(m.id)}
-                style={[styles.mealRow, { backgroundColor: theme.bgSunken }]}
-              >
-                {selecting && !m.pending ? (
-                  <View
-                    style={[
-                      styles.checkbox,
-                      { borderColor: theme.text, backgroundColor: picked.includes(m.id) ? theme.text : 'transparent' },
-                    ]}
-                  >
-                    {picked.includes(m.id) ? <Icon name="check" size={14} color={theme.bg} weight={2.4} /> : null}
-                  </View>
-                ) : null}
-                <View style={{ flex: 1 }}>
-                  <Text numberOfLines={2} style={[type.bodyStrong, { color: theme.text }]}>
-                    {m.name}
-                  </Text>
-                  {m.pending ? (
-                    <Text style={[type.caption, { color: theme.uncertain, marginTop: 2 }]}>
-                      {`${m.time} · w trakcie analizy, jeszcze nie liczone`}
-                    </Text>
-                  ) : (
-                    <MacroLine
-                      lead={`${m.time} · ${amount(m.kcal, m.precise)} kcal`}
-                      carbs={m.carbs_g}
-                      protein={m.protein_g}
-                      fat={m.fat_g}
-                      decimals={m.precise ? 1 : 0}
-                    />
-                  )}
-                  {m.note ? (
-                    <Text numberOfLines={2} style={[type.caption, { color: theme.textFaint, marginTop: 2 }]}>
-                      {m.note}
-                    </Text>
-                  ) : null}
-                </View>
-                {m.pending || selecting ? null : (
-                  <PressableScale
-                    accessibilityRole="button"
-                    accessibilityLabel={`Edytuj posiłek: ${m.name}`}
-                    onPress={() => {
-                      keepScroll.current = true
-                      router.push({ pathname: '/edit-meal', params: { id: String(m.id) } } as never)
-                    }}
-                    hitSlop={space.sm}
-                    style={[styles.ghost, { borderColor: theme.border }]}
-                  >
-                    <Text style={[type.label, { color: theme.textMuted }]}>Edytuj</Text>
-                  </PressableScale>
-                )}
-                {selecting ? null : (
-                  <PressableScale
-                    accessibilityRole="button"
-                    accessibilityLabel={`Usuń posiłek: ${m.name}`}
-                    onPress={() => confirmDelete(m)}
-                    hitSlop={space.sm}
-                    style={[styles.ghost, { borderColor: theme.border }]}
-                  >
-                    <Text style={[type.label, { color: theme.textMuted }]}>Usuń</Text>
-                  </PressableScale>
-                )}
-              </Pressable>
-            ))}
+            {buildEntries(meals).map((e) => (e.kind === 'group' ? renderGroup(e.id, e.members) : renderMeal(e.meal, false)))}
           </View>
         )}
       </View>
@@ -375,10 +486,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg, paddingVertical: space.sm,
     borderRadius: radius.pill, borderWidth: StyleSheet.hairlineWidth,
   },
-  mealRow: {
-    flexDirection: 'row', alignItems: 'center', gap: space.md,
-    padding: space.lg, borderRadius: radius.lg,
-  },
+  mealRow: { gap: space.xs, padding: space.lg, borderRadius: radius.lg },
+  nestedRow: { paddingHorizontal: space.sm, paddingVertical: space.sm },
+  mealTop: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  mealName: { flex: 1 },
+  groupCard: { padding: space.lg, borderRadius: radius.lg },
+  groupHead: { gap: space.xs },
   emptyCard: { marginTop: space.md, padding: space.lg, borderRadius: radius.xl },
   ghostRow: {
     flexDirection: 'row', alignItems: 'center', gap: space.md,

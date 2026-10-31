@@ -35,7 +35,6 @@ import {
   selectedAnswer,
   setNote,
   setTitle,
-  stashToBasket,
   useScan,
   type WebLookupState,
 } from '../src/scan/store'
@@ -288,18 +287,6 @@ export default function Result() {
           },
         ]}
       >
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            void Haptics.selectionAsync()
-            stashToBasket()
-            router.replace('/camera')
-          }}
-          hitSlop={space.sm}
-          style={{ alignSelf: 'center', paddingBottom: space.md }}
-        >
-          <Text style={[type.label, { color: theme.protein }]}>+ Dodaj kolejny produkt do posiłku</Text>
-        </Pressable>
         <View style={{ flexDirection: 'row', gap: space.md }}>
           <PressableScale
             accessibilityRole="button"

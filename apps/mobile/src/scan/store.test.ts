@@ -6,13 +6,9 @@ import type { ScanResult } from '@nutai/pipeline'
 import {
   answerQuestion,
   applyWebOption,
-  clearBasket,
-  basketSize,
   replaceRowFood,
-  restoreBasket,
   setNote,
   setTitle,
-  stashToBasket,
   editGrams,
   getPhase,
   removeRow,
@@ -223,36 +219,6 @@ describe('answerQuestion', () => {
     editGrams('r2', 70)
     expect(selectedAnswer(readyPhase(), 'sauce_type')).toBeNull()
     expect(readyPhase().result.meal.ingredients[1]!.grams).toBe(70)
-  })
-})
-
-describe('basket: several scans, one meal', () => {
-  it('merges parked rows into the next ready scan with unique ids and summed totals', () => {
-    readyWith([row({ id: 'item-0', grams: 100 })])
-    const first = readyPhase().result.totals.kcal
-    setTitle('Lunch')
-    stashToBasket()
-    expect(getPhase().kind).toBe('idle')
-    expect(basketSize()).toBe(1)
-
-    readyWith([row({ id: 'item-0', displayName: 'Rice', grams: 100 })])
-    const p = readyPhase()
-    expect(basketSize()).toBe(0)
-    expect(p.result.meal.ingredients).toHaveLength(2)
-    expect(new Set(p.result.meal.ingredients.map((r) => r.id)).size).toBe(2)
-    expect(p.result.items).toHaveLength(2)
-    expect(p.result.totals.kcal).toBeGreaterThan(first * 1.8)
-    expect(p.title).toBe('Lunch')
-  })
-
-  it('restoreBasket brings the parked meal back, clearBasket drops it', () => {
-    readyWith([row()])
-    stashToBasket()
-    restoreBasket()
-    expect(readyPhase().result.meal.ingredients).toHaveLength(1)
-    stashToBasket()
-    clearBasket()
-    expect(basketSize()).toBe(0)
   })
 })
 

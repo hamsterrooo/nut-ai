@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PressableScale } from '../src/components/motion'
 import { Icon, type IconName } from '../src/components/Icon'
 import { startBarcodeScan, startLabelScan, startScan } from '../src/scan/orchestrator'
-import { basketSize, clearBasket, restoreBasket, setPhase } from '../src/scan/store'
+import { setPhase } from '../src/scan/store'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
@@ -67,7 +67,6 @@ export default function Camera() {
   const [found, setFound] = useState(false)
   const [zoomIdx, setZoomIdx] = useState(1)
   const [ultraLens, setUltraLens] = useState<string | null>(null)
-  const [parked, setParked] = useState(() => basketSize())
 
   if (!permission) return <View style={{ flex: 1, backgroundColor: '#000' }} />
 
@@ -239,34 +238,6 @@ export default function Camera() {
         <Text style={{ color: '#fff', fontSize: 22 }}>×</Text>
       </Pressable>
 
-      {parked > 0 ? (
-        <View style={[styles.basket, { top: insets.top + MIN_TAP_TARGET + space.xl }]}>
-          <Text style={[type.label, { color: '#fff' }]}>
-            Posiłek w toku: {parked} {parked === 1 ? 'składnik' : 'składników'}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              restoreBasket()
-              router.replace('/result')
-            }}
-            hitSlop={space.sm}
-          >
-            <Text style={[type.label, { color: '#fff', textDecorationLine: 'underline' }]}>Zapisz</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              clearBasket()
-              setParked(0)
-            }}
-            hitSlop={space.sm}
-          >
-            <Text style={[type.label, { color: 'rgba(255,255,255,0.7)' }]}>Anuluj</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
       <View style={[styles.shortcuts, { top: insets.top + space.md }]}>
         {SHORTCUTS.map((s) => (
           <PressableScale
@@ -354,17 +325,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  basket: {
-    position: 'absolute',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.lg,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.sm,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl },
   primary: {
