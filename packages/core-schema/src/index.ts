@@ -3,7 +3,5 @@
 export * from './vision-payload.js'
 export * from './domain.js'
 export * from './wire-schema.js'
-export * from './web-lookup.js'
 export * from './label-scan.js'
-export * from './receipt-scan.js'
 export * from './eu-units.js'

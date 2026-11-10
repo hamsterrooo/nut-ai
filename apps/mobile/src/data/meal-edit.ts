@@ -1,4 +1,5 @@
 import type { DbAdapter } from '@nutai/db-adapter'
+import { insertLogItem } from './log-write'
 
 /**
  * Editing a logged meal: name, description, the grams of each ingredient, and
@@ -132,13 +133,25 @@ export async function saveMealEdit(h: DbAdapter, id: number, edit: MealEdit): Pr
       const now = Date.now()
       for (const a of edit.add) {
         if (!Number.isFinite(a.grams) || a.grams <= 0) continue
-        await tx.run(
-          `INSERT INTO log_items (meal_id, matched_food_id, matched_food_source, display_name, grams,
-                                  gram_pathway, portion_source, snap_energy_kcal, snap_protein_g, snap_fat_g,
-                                  snap_carb_g, snap_fiber_g, snap_sugar_g, snap_sodium_mg,
-                                  is_estimate, macros_user_edited, sort_order, logged_at)
-           VALUES (?,?,'corpus',?,?,'user_edited','db_search',?,?,?,?,?,?,?,0,0,?,?)`,
-          [id, a.foodId, a.name, a.grams, a.kcal, a.protein, a.fat, a.carbs, a.fiber, a.sugar, a.sodium, order++, now],
+        await insertLogItem(
+          tx,
+          id,
+          {
+            foodId: a.foodId,
+            displayName: a.name,
+            grams: a.grams,
+            gramPathway: 'user_edited',
+            portionSource: 'db_search',
+            kcal: a.kcal,
+            protein_g: a.protein,
+            fat_g: a.fat,
+            carbs_g: a.carbs,
+            fiber_g: a.fiber,
+            sugar_g: a.sugar,
+            sodium_mg: a.sodium,
+          },
+          order++,
+          now,
         )
       }
     }

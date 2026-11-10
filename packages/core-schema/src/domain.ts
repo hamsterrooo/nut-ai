@@ -75,12 +75,6 @@ export type IngredientOrigin =
   | 'manual_custom'
   /** Pushed by answering a clarifying chip — e.g. the oil the user confirmed. */
   | 'assumption_filler'
-  /**
-   * Transcribed from a brand's published nutrition facts found by the web-search
-   * refinement. Carries a source URL in its assumptions; distinct from
-   * vision_model because a citation and a guess are different classes of claim.
-   */
-  | 'web_lookup'
 
 export interface AssumptionTag {
   type: string
@@ -99,8 +93,6 @@ export interface IngredientRow {
   /** Copied at add time. Immutable. Never re-looked-up live. */
   nutrientSnapshot: NutrientRow100g
   origin: IngredientOrigin
-  /** Where a web_lookup row's numbers were transcribed from. Shown in the UI. */
-  sourceUrl?: string | null
   gramPathway: GramPathway
   /** Half-width of this row's uncertainty band, as a fraction. §7.2. */
   bandHalfPct: number

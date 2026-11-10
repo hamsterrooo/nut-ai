@@ -35,21 +35,18 @@ describe('resolveInference', () => {
     const r = await resolveInference()
     expect(r.ok).toBe(true)
     if (r.ok) {
-      expect(r.value.dialect).toBe('openai')
-      expect(r.value.selected).toBe('openai')
+      expect(r.value.provider).toBe('openai')
       expect(r.value.model).toBe('gpt-4o-mini')
-      expect(r.value.textModel).toBe('gpt-4o-mini')
       expect(r.value.credential.value).toBe('sk-vendor')
     }
   })
 
-  it('a chosen provider_model is honoured for scans and text calls', async () => {
+  it('a chosen provider_model is honoured', async () => {
     settings.set('provider', 'openai')
     settings.set('provider_model', 'gpt-4o')
     creds.set('openai', { kind: 'api_key', value: 'sk-vendor' })
     const r = await resolveInference()
     expect(r.ok && r.value.model).toBe('gpt-4o')
-    expect(r.ok && r.value.textModel).toBe('gpt-4o')
   })
 
   it('a vendor setting with no key → key-missing', async () => {

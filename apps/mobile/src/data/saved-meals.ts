@@ -1,5 +1,5 @@
 import type { DbAdapter } from '@nutai/db-adapter'
-import { localDate, slotFor } from './date-utils'
+import { insertLogItem, insertMeal } from './log-write'
 
 /**
  * History and saved entries.
@@ -158,35 +158,27 @@ export async function deleteSaved(h: DbAdapter, id: number): Promise<void> {
 export async function logItems(h: DbAdapter, name: string, items: readonly SavedItem[], now: number): Promise<number> {
   const joined = items.map((i) => i.name).join(', ')
   return h.transaction(async (tx) => {
-    const meal = await tx.run(
-      `INSERT INTO meals (logged_at, local_date, meal_slot, portion_eaten_fraction, analysis_status, created_at, title)
-       VALUES (?,?,?,1.0,'complete',?,?)`,
-      [now, localDate(now), slotFor(now), now, name !== joined ? name : null],
-    )
-    const mealId = Number(meal.lastInsertRowId)
+    const mealId = await insertMeal(tx, { loggedAt: now, title: name !== joined ? name : null })
     for (const [i, it] of items.entries()) {
-      await tx.run(
-        `INSERT INTO log_items (meal_id, matched_food_id, matched_food_source, display_name, grams,
-                                gram_pathway, portion_source, snap_energy_kcal, snap_protein_g, snap_fat_g,
-                                snap_carb_g, snap_fiber_g, snap_sugar_g, snap_sodium_mg,
-                                is_estimate, macros_user_edited, sort_order, logged_at)
-         VALUES (?,?,?,?,?,'user_edited','db_search',?,?,?,?,?,?,?,0,0,?,?)`,
-        [
-          mealId,
-          it.foodId,
-          it.foodId != null ? 'corpus' : 'estimate',
-          it.name,
-          it.grams,
-          it.kcal,
-          it.protein,
-          it.fat,
-          it.carbs,
-          it.fiber,
-          it.sugar,
-          it.sodium,
-          i,
-          now,
-        ],
+      await insertLogItem(
+        tx,
+        mealId,
+        {
+          foodId: it.foodId,
+          displayName: it.name,
+          grams: it.grams,
+          gramPathway: 'user_edited',
+          portionSource: 'db_search',
+          kcal: it.kcal,
+          protein_g: it.protein,
+          fat_g: it.fat,
+          carbs_g: it.carbs,
+          fiber_g: it.fiber,
+          sugar_g: it.sugar,
+          sodium_mg: it.sodium,
+        },
+        i,
+        now,
       )
     }
     return mealId

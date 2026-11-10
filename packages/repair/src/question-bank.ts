@@ -226,10 +226,6 @@ export const QUESTION_BANK: readonly BankQuestion[] = [
   },
 ]
 
-export function questionByReason(reason: UncertaintyReason): BankQuestion | null {
-  return QUESTION_BANK.find((q) => q.reasons.includes(reason)) ?? null
-}
-
 /** Categories whose oil use is high-variance regardless of model confidence. */
 export const HIGH_OIL_VARIANCE = /\b(stir.?fry|saute|sautee|fried rice|curry|scrambled|omelet|hash|roast)\b/
 

@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store'
-import type { ProviderId } from '@nutai/prompt'
+import type { Credential, ProviderId } from '@nutai/prompt'
 
 /**
  * API credentials.
@@ -22,22 +22,14 @@ import type { ProviderId } from '@nutai/prompt'
  * the reason someone stops logging.
  */
 
-export type CredentialKind = 'api_key' | 'oauth'
+export type CredentialKind = Credential['kind']
 
-/** One Keychain slot per provider. */
-export type CredentialSlot = ProviderId
-
-export interface StoredCredential {
-  kind: CredentialKind
-  value: string
-}
-
-const keyFor = (p: CredentialSlot) => `key.${p}`
-const kindFor = (p: CredentialSlot) => `kind.${p}`
+const keyFor = (p: ProviderId) => `key.${p}`
+const kindFor = (p: ProviderId) => `kind.${p}`
 
 export async function saveCredential(
-  provider: CredentialSlot,
-  cred: StoredCredential,
+  provider: ProviderId,
+  cred: Credential,
 ): Promise<void> {
   await SecureStore.setItemAsync(keyFor(provider), cred.value, {
     keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
@@ -45,14 +37,14 @@ export async function saveCredential(
   await SecureStore.setItemAsync(kindFor(provider), cred.kind)
 }
 
-export async function loadCredential(provider: CredentialSlot): Promise<StoredCredential | null> {
+export async function loadCredential(provider: ProviderId): Promise<Credential | null> {
   const value = await SecureStore.getItemAsync(keyFor(provider))
   if (!value) return null
   const kind = (await SecureStore.getItemAsync(kindFor(provider))) as CredentialKind | null
   return { kind: kind ?? 'api_key', value }
 }
 
-export async function clearCredential(provider: CredentialSlot): Promise<void> {
+export async function clearCredential(provider: ProviderId): Promise<void> {
   await SecureStore.deleteItemAsync(keyFor(provider))
   await SecureStore.deleteItemAsync(kindFor(provider))
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runLabelScan, runScan, runScanWithFallback, runWebLookup } from './client'
+import { runLabelScan, runScan, runScanWithFallback } from './client'
 
 /**
  * The cloud client against scripted responses: envelope extraction for every
@@ -129,53 +129,6 @@ describe('runScanWithFallback', () => {
     const r = await runScanWithFallback(SCAN_REQ(), impl)
     expect(r.ok).toBe(false)
     expect(calls).toHaveLength(2)
-  })
-})
-
-describe('runWebLookup JSON fishing', () => {
-  it('anthropic: takes the LAST text block — tool blocks interleave before it', async () => {
-    const { impl } = scripted([
-      {
-        status: 200,
-        body: JSON.stringify({
-          content: [
-            { type: 'text', text: 'Searching…' },
-            { type: 'server_tool_use', name: 'web_search' },
-            { type: 'web_search_tool_result', content: [] },
-            { type: 'text', text: '```json\n{"found":true,"source_url":"https://x.com","question":null,"options":[]}\n```' },
-          ],
-        }),
-      },
-    ])
-    const r = await runWebLookup('anthropic', { model: 'm', itemName: 'x', brand: null }, { kind: 'api_key', value: 'k' }, impl)
-    expect(r.ok).toBe(true)
-    expect((r.raw as any).found).toBe(true)
-  })
-
-  it('openai Responses API: finds the message item in output[]', async () => {
-    const { impl } = scripted([
-      {
-        status: 200,
-        body: JSON.stringify({
-          output: [
-            { type: 'web_search_call' },
-            { type: 'message', content: [{ type: 'output_text', text: '{"found":false,"source_url":null,"question":null,"options":[]}' }] },
-          ],
-        }),
-      },
-    ])
-    const r = await runWebLookup('openai', { model: 'm', itemName: 'x', brand: null }, { kind: 'api_key', value: 'k' }, impl)
-    expect(r.ok).toBe(true)
-    expect((r.raw as any).found).toBe(false)
-  })
-
-  it('prose with no JSON object is schema-violation, not a crash and not offline', async () => {
-    const { impl } = scripted([
-      { status: 200, body: JSON.stringify({ content: [{ type: 'text', text: 'I could not find anything.' }] }) },
-    ])
-    const r = await runWebLookup('anthropic', { model: 'm', itemName: 'x', brand: null }, { kind: 'api_key', value: 'k' }, impl)
-    expect(r.ok).toBe(false)
-    expect(r.error?.kind).toBe('schema-violation')
   })
 })
 

@@ -1,4 +1,4 @@
-import { MIGRATIONS, USER_SCHEMA_VERSION } from './schema.js'
+import { MIGRATIONS } from './schema.js'
 import type { DbAdapter } from './types.js'
 
 /**
@@ -51,8 +51,4 @@ export async function migrate(db: DbAdapter, now: number): Promise<MigrationResu
   }
 
   return { from, to: await currentVersion(db), applied }
-}
-
-export function isUpToDate(version: number): boolean {
-  return version >= USER_SCHEMA_VERSION
 }

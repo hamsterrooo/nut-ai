@@ -1,5 +1,5 @@
-import { ANTHROPIC_OAUTH_BETA, type ProviderId } from '@nutai/prompt'
-import type { Credential, ScanFailure } from './client'
+import { anthropicHeaders, PROVIDER_ORIGIN, type Credential, type ProviderId } from '@nutai/prompt'
+import { classify, type ScanFailure } from './client'
 
 /**
  * Credential validation.
@@ -51,46 +51,30 @@ export interface ValidationErr {
 
 export type ValidationResult = ValidationOk | ValidationErr
 
-const ANTHROPIC_VERSION = '2023-06-01'
+type Shape = ValidationOk['usedShape']
 
-function classify(status: number, body: string): ScanFailure {
-  if (status === 401 || status === 403) {
-    return { kind: 'key-invalid', message: 'Dostawca odrzucił to poświadczenie.', retryable: false, httpStatus: status }
-  }
-  if (status === 402) {
-    return { kind: 'quota-exhausted', message: 'Na koncie nie ma kredytu.', retryable: false, httpStatus: status }
-  }
-  if (status === 404) {
-    return { kind: 'model-unavailable', message: 'Ten model nie jest dostępny na tym koncie.', retryable: false, httpStatus: status }
-  }
-  if (status === 429) {
-    return { kind: 'error-retryable', message: 'Przekroczono limit zapytań. Spróbuj za chwilę.', retryable: true, httpStatus: status }
-  }
-  if (status >= 500) {
-    return { kind: 'error-retryable', message: 'Dostawca zgłosił błąd serwera.', retryable: true, httpStatus: status }
-  }
-  return {
-    kind: 'error-retryable',
-    message: `Nieoczekiwana odpowiedź ${status} od dostawcy.`,
-    retryable: true,
-    httpStatus: status,
-  }
+interface Probe {
+  shape: Shape
+  url: string
+  headers: Record<string, string>
+  /** Absent means GET. */
+  body?: unknown
 }
 
+const PROVIDER_NAME: Record<ProviderId, string> = { anthropic: 'Anthropic', openai: 'OpenAI', google: 'Google' }
+
 async function attempt(
-  url: string,
-  headers: Record<string, string>,
+  probe: Probe,
   fetchImpl: typeof fetch,
   timeoutMs: number,
-  postBody?: unknown,
 ): Promise<{ status: number; body: string } | { aborted: true } | { offline: true }> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetchImpl(url, {
-      method: postBody === undefined ? 'GET' : 'POST',
-      headers,
-      body: postBody === undefined ? undefined : JSON.stringify(postBody),
+    const res = await fetchImpl(probe.url, {
+      method: probe.body === undefined ? 'GET' : 'POST',
+      headers: probe.headers,
+      body: probe.body === undefined ? undefined : JSON.stringify(probe.body),
       signal: controller.signal,
     })
     const body = await res.text()
@@ -103,6 +87,35 @@ async function attempt(
   }
 }
 
+function probesFor(provider: ProviderId, model: string, credential: Credential): Probe[] {
+  const origin = PROVIDER_ORIGIN[provider]
+  const id = encodeURIComponent(model)
+  if (provider === 'openai') {
+    return [{ shape: 'bearer', url: `${origin}/v1/models/${id}`, headers: { authorization: `Bearer ${credential.value}` } }]
+  }
+  if (provider === 'google') {
+    return [{ shape: 'query-param', url: `${origin}/v1beta/models/${id}`, headers: { 'x-goog-api-key': credential.value } }]
+  }
+
+  // Each Anthropic shape probes differently. x-api-key: free GET on the
+  // model-retrieve endpoint. bearer: a 1-token POST to /v1/messages, because that
+  // is the endpoint scans use and the only one a setup-token is guaranteed scoped for.
+  const apiKey: Probe = {
+    shape: 'x-api-key',
+    url: `${origin}/v1/models/${id}`,
+    headers: anthropicHeaders('api_key', credential.value),
+  }
+  const bearer: Probe = {
+    shape: 'bearer',
+    url: `${origin}/v1/messages`,
+    headers: anthropicHeaders('oauth', credential.value),
+    body: { model, max_tokens: 1, messages: [{ role: 'user', content: 'ok' }] },
+  }
+  // A credential pasted into the wrong tab is the single most common mistake
+  // here, so the other shape is always tried before blaming the user.
+  return credential.kind === 'oauth' ? [bearer, apiKey] : [apiKey, bearer]
+}
+
 export async function validateCredential(
   provider: ProviderId,
   model: string,
@@ -110,79 +123,15 @@ export async function validateCredential(
   fetchImpl: typeof fetch = fetch,
   timeoutMs = 15_000,
 ): Promise<ValidationResult> {
-  // ---- Anthropic: two shapes, each probing the endpoint it would really use --
-  if (provider === 'anthropic') {
-    // Each shape probes differently. x-api-key: free GET on the model-retrieve
-    // endpoint. bearer: a 1-token POST to /v1/messages, because that is the
-    // endpoint scans use and the only one a setup-token is guaranteed scoped for.
-    const probes: Record<'x-api-key' | 'bearer', () => ReturnType<typeof attempt>> = {
-      'x-api-key': () =>
-        attempt(
-          `https://api.anthropic.com/v1/models/${encodeURIComponent(model)}`,
-          { 'x-api-key': credential.value, 'anthropic-version': ANTHROPIC_VERSION },
-          fetchImpl,
-          timeoutMs,
-        ),
-      bearer: () =>
-        attempt(
-          'https://api.anthropic.com/v1/messages',
-          {
-            authorization: `Bearer ${credential.value}`,
-            'anthropic-version': ANTHROPIC_VERSION,
-            'anthropic-beta': ANTHROPIC_OAUTH_BETA,
-            'content-type': 'application/json',
-          },
-          fetchImpl,
-          timeoutMs,
-          { model, max_tokens: 1, messages: [{ role: 'user', content: 'ok' }] },
-        ),
-    }
+  const probes = probesFor(provider, model, credential)
+  const details: string[] = []
 
-    // A credential pasted into the wrong tab is the single most common mistake
-    // here, so the other shape is always tried before blaming the user.
-    const order: Array<'x-api-key' | 'bearer'> =
-      credential.kind === 'oauth' ? ['bearer', 'x-api-key'] : ['x-api-key', 'bearer']
-
-    const details: string[] = []
-    for (const shape of order) {
-      const r = await probes[shape]()
-      if ('offline' in r) {
-        return {
-          ok: false,
-          error: { kind: 'offline', message: 'Brak połączenia z Anthropic.', retryable: true },
-          detail: 'Żądanie sieciowe nie dotarło do dostawcy.',
-        }
-      }
-      if ('aborted' in r) {
-        return {
-          ok: false,
-          error: { kind: 'timeout-ambiguous', message: 'Sprawdzanie przekroczyło limit czasu.', retryable: false },
-          detail: `Brak odpowiedzi w ciągu ${timeoutMs / 1000} s.`,
-        }
-      }
-      if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: shape, modelId: model }
-      details.push(`${shape}: HTTP ${r.status} — ${r.body}`)
-      // A 404 means auth worked but the model is wrong; trying the other header
-      // shape cannot help, so stop and say so.
-      if (r.status === 404) {
-        return { ok: false, error: classify(404, r.body), detail: details.join('\n') }
-      }
-    }
-    return { ok: false, error: classify(401, details.join('\n')), detail: details.join('\n') }
-  }
-
-  // ---- OpenAI --------------------------------------------------------------
-  if (provider === 'openai') {
-    const r = await attempt(
-      `https://api.openai.com/v1/models/${encodeURIComponent(model)}`,
-      { authorization: `Bearer ${credential.value}` },
-      fetchImpl,
-      timeoutMs,
-    )
+  for (const probe of probes) {
+    const r = await attempt(probe, fetchImpl, timeoutMs)
     if ('offline' in r) {
       return {
         ok: false,
-        error: { kind: 'offline', message: 'Brak połączenia z OpenAI.', retryable: true },
+        error: { kind: 'offline', message: `Brak połączenia z ${PROVIDER_NAME[provider]}.`, retryable: true },
         detail: 'Żądanie sieciowe nie dotarło do dostawcy.',
       }
     }
@@ -193,31 +142,15 @@ export async function validateCredential(
         detail: `Brak odpowiedzi w ciągu ${timeoutMs / 1000} s.`,
       }
     }
-    if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: 'bearer', modelId: model }
-    return { ok: false, error: classify(r.status, r.body), detail: `HTTP ${r.status} — ${r.body}` }
-  }
+    if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: probe.shape, modelId: model }
 
-  // ---- Google --------------------------------------------------------------
-  const r = await attempt(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}`,
-    { 'x-goog-api-key': credential.value },
-    fetchImpl,
-    timeoutMs,
-  )
-  if ('offline' in r) {
-    return {
-      ok: false,
-      error: { kind: 'offline', message: 'Brak połączenia z Google.', retryable: true },
-      detail: 'Żądanie sieciowe nie dotarło do dostawcy.',
+    const line = `HTTP ${r.status} — ${r.body}`
+    details.push(probes.length > 1 ? `${probe.shape}: ${line}` : line)
+    // A 404 means auth worked but the model is wrong, so trying the other
+    // header shape cannot help. With one probe, whatever came back is the answer.
+    if (probes.length === 1 || r.status === 404) {
+      return { ok: false, error: classify(r.status, r.body), detail: details.join('\n') }
     }
   }
-  if ('aborted' in r) {
-    return {
-      ok: false,
-      error: { kind: 'timeout-ambiguous', message: 'Sprawdzanie przekroczyło limit czasu.', retryable: false },
-      detail: `Brak odpowiedzi w ciągu ${timeoutMs / 1000} s.`,
-    }
-  }
-  if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: 'query-param', modelId: model }
-  return { ok: false, error: classify(r.status, r.body), detail: `HTTP ${r.status} — ${r.body}` }
+  return { ok: false, error: classify(401, details.join('\n')), detail: details.join('\n') }
 }

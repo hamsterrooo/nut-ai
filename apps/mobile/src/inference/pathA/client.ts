@@ -1,12 +1,10 @@
 import {
-  buildAnthropicRequest,
-  buildGeminiRequest,
   buildLabelScanRequest,
-  buildOpenAIRequest,
-  buildTextJsonRequest,
-  buildWebLookupRequest,
+  buildScanRequest,
   computeScanCost,
+  type Credential,
   type ProviderId,
+  type ProviderRequest,
 } from '@nutai/prompt'
 
 /**
@@ -62,11 +60,6 @@ export interface ScanSuccess {
 
 export type ScanOutcome = { ok: true; value: ScanSuccess } | { ok: false; error: ScanFailure }
 
-export interface Credential {
-  kind: 'api_key' | 'oauth'
-  value: string
-}
-
 export interface ScanRequest {
   provider: ProviderId
   model: string
@@ -75,8 +68,6 @@ export interface ScanRequest {
   localSignalsBlock: string
   jsonSchema: unknown
   timeoutMs?: number
-  /** Proxy origin; absent means the vendor's own host. */
-  baseUrl?: string
   /** No photo: the meal is described in the local-signals block. */
   textOnly?: boolean
 }
@@ -97,7 +88,7 @@ function errorDetail(body: string): string {
   return msg.length > 300 ? `${msg.slice(0, 300)}...` : msg
 }
 
-function classify(status: number, body: string): ScanFailure {
+export function classify(status: number, body: string): ScanFailure {
   if (status === 401 || status === 403) {
     return { kind: 'key-invalid', message: 'Dostawca odrzucił ten klucz.', retryable: false, httpStatus: status }
   }
@@ -169,25 +160,19 @@ function extractPayload(provider: ProviderId, json: unknown): { raw: unknown; in
   }
 }
 
-export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch): Promise<ScanOutcome> {
-  const input = {
-    model: req.model,
-    imagesBase64: req.imagesBase64,
-    localSignalsBlock: req.localSignalsBlock,
-    jsonSchema: req.jsonSchema,
-    ...(req.baseUrl ? { baseUrl: req.baseUrl } : {}),
-    ...(req.textOnly ? { textOnly: true } : {}),
-  }
-
-  const built =
-    req.provider === 'anthropic'
-      ? buildAnthropicRequest(input, req.credential)
-      : req.provider === 'openai'
-        ? buildOpenAIRequest(input, req.credential.value)
-        : buildGeminiRequest(input, req.credential.value)
-
+/**
+ * The one transport: POST, abort on timeout, classify every way it can fail,
+ * pull the JSON payload out of the provider's envelope, price it from real token counts.
+ */
+async function callModel(
+  provider: ProviderId,
+  model: string,
+  built: ProviderRequest,
+  timeoutMs: number,
+  fetchImpl: typeof fetch,
+): Promise<ScanOutcome> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), req.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   const started = Date.now()
 
   try {
@@ -208,7 +193,7 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
       return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca zwrócił uszkodzony JSON.', retryable: false } }
     }
 
-    const extracted = extractPayload(req.provider, json)
+    const extracted = extractPayload(provider, json)
     if (!extracted || extracted.raw == null) {
       const j = json as Record<string, any>
       const reason = j?.candidates?.[0]?.finishReason ?? j?.stop_reason ?? j?.choices?.[0]?.finish_reason
@@ -224,14 +209,13 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
         outputTokens: extracted.outputTokens,
         // Real token counts, never an estimate, so the ledger shows an actual
         // dollar figure rather than a guess.
-        costUsd: computeScanCost(req.provider, req.model, extracted.inputTokens, extracted.outputTokens),
+        costUsd: computeScanCost(provider, model, extracted.inputTokens, extracted.outputTokens),
         latencyMs: Date.now() - started,
         promptVersion: built.promptVersion,
       },
     }
   } catch (err) {
-    const aborted = (err as Error)?.name === 'AbortError'
-    if (aborted) {
+    if ((err as Error)?.name === 'AbortError') {
       // The request MAY have been billed. Never auto-retry — no provider offers
       // an idempotency key here, so a retry can double-charge for one photo. The
       // user is told, and chooses.
@@ -248,6 +232,17 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
   } finally {
     clearTimeout(timer)
   }
+}
+
+export function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch): Promise<ScanOutcome> {
+  const built = buildScanRequest(req.provider, req.credential, {
+    model: req.model,
+    imagesBase64: req.imagesBase64,
+    localSignalsBlock: req.localSignalsBlock,
+    jsonSchema: req.jsonSchema,
+    ...(req.textOnly ? { textOnly: true } : {}),
+  })
+  return callModel(req.provider, req.model, built, req.timeoutMs ?? DEFAULT_TIMEOUT_MS, fetchImpl)
 }
 
 /**
@@ -274,161 +269,14 @@ export async function runScanWithFallback(
 
 /**
  * Nutrition-label transcription: one image in, one LabelPayload-shaped JSON
- * out. No tools, no structured-output mode; validated by the caller.
+ * out. No structured-output mode; validated by the caller.
  */
-export async function runLabelScan(
+export function runLabelScan(
   provider: ProviderId,
-  input: { model: string; imageBase64: string; baseUrl?: string },
+  input: { model: string; imageBase64: string },
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
   timeoutMs = 30_000,
-): Promise<WebLookupOutcome> {
-  return postVisionJson(provider, buildLabelScanRequest(provider, input, credential), fetchImpl, timeoutMs)
-}
-
-
-async function postVisionJson(
-  provider: ProviderId,
-  built: { url: string; headers: Record<string, string>; body: unknown },
-  fetchImpl: typeof fetch,
-  timeoutMs: number,
-): Promise<WebLookupOutcome> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const res = await fetchImpl(built.url, {
-      method: 'POST',
-      headers: built.headers,
-      body: JSON.stringify(built.body),
-      signal: controller.signal,
-    })
-    const text = await res.text()
-    if (!res.ok) return { ok: false, error: classify(res.status, text) }
-
-    let j: Record<string, any>
-    try {
-      j = JSON.parse(text) as Record<string, any>
-    } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca zwrócił uszkodzony JSON.', retryable: false } }
-    }
-
-    let out: string | null = null
-    if (provider === 'anthropic') {
-      const texts = (j.content ?? []).filter((b: any) => b?.type === 'text')
-      out = texts.length ? texts[texts.length - 1].text : null
-    } else if (provider === 'openai') {
-      out = j.choices?.[0]?.message?.content ?? null
-    } else {
-      out = (j.candidates?.[0]?.content?.parts ?? []).map((p: any) => p?.text ?? '').join('') || null
-    }
-    if (!out) {
-      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca nie zwrócił tekstu.', retryable: false } }
-    }
-
-    const fenced = out.replace(/```(?:json)?/g, '').trim()
-    const start = fenced.indexOf('{')
-    const end = fenced.lastIndexOf('}')
-    if (start < 0 || end <= start) {
-      return { ok: false, error: { kind: 'schema-violation', message: 'Brak JSON w odpowiedzi.', retryable: false } }
-    }
-    try {
-      return { ok: true, raw: JSON.parse(fenced.slice(start, end + 1)) }
-    } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'Nie udało się sparsować JSON z odpowiedzi.', retryable: false } }
-    }
-  } catch (err) {
-    if ((err as Error)?.name === 'AbortError') {
-      return { ok: false, error: { kind: 'timeout-ambiguous', message: 'Skan przekroczył limit czasu.', retryable: false } }
-    }
-    return { ok: false, error: { kind: 'offline', message: 'Brak połączenia z dostawcą.', retryable: true } }
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-/**
- * The web-lookup refinement call — the provider's server-side search tool.
- *
- * No structured-output mode here (it does not compose with search on every
- * provider), so the JSON is fished out of prose defensively: last text block,
- * markdown fences stripped, outermost braces isolated. The caller validates
- * with WebLookupResultZ — this function only transports.
- */
-export interface WebLookupOutcome {
-  ok: boolean
-  raw?: unknown
-  error?: ScanFailure
-}
-
-export async function runWebLookup(
-  provider: ProviderId,
-  input: {
-    model: string
-    itemName: string
-    brand: string | null
-    visualContext?: string | null
-    baseUrl?: string
-    /** OpenAI only: false = Chat Completions without the web_search tool. */
-    webSearch?: boolean
-  },
-  credential: Credential,
-  fetchImpl: typeof fetch = fetch,
-  timeoutMs = 30_000,
-): Promise<WebLookupOutcome> {
-  const built = buildWebLookupRequest(provider, input, credential)
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const res = await fetchImpl(built.url, {
-      method: 'POST',
-      headers: built.headers,
-      body: JSON.stringify(built.body),
-      signal: controller.signal,
-    })
-    const text = await res.text()
-    if (!res.ok) return { ok: false, error: classify(res.status, text) }
-
-    let j: Record<string, any>
-    try {
-      j = JSON.parse(text) as Record<string, any>
-    } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca zwrócił uszkodzony JSON.', retryable: false } }
-    }
-    let out: string | null = null
-    if (provider === 'anthropic') {
-      // Content is a block ARRAY interleaving tool use and text; the answer is
-      // the LAST text block, not the first.
-      const texts = (j.content ?? []).filter((b: any) => b?.type === 'text')
-      out = texts.length ? texts[texts.length - 1].text : null
-    } else if (provider === 'openai') {
-      // Responses API: output[] items; the message item holds output_text parts.
-      // Chat Completions (the tool-less path): choices[0].message.content.
-      const msg = (j.output ?? []).find((o: any) => o?.type === 'message')
-      out = j.choices?.[0]?.message?.content ?? msg?.content?.map((c: any) => c?.text ?? '').join('') ?? j.output_text ?? null
-    } else {
-      out = (j.candidates?.[0]?.content?.parts ?? []).map((p: any) => p?.text ?? '').join('') || null
-    }
-    if (!out) {
-      return { ok: false, error: { kind: 'schema-violation', message: 'Dostawca nie zwrócił tekstu.', retryable: false } }
-    }
-
-    const fenced = out.replace(/```(?:json)?/g, '').trim()
-    const start = fenced.indexOf('{')
-    const end = fenced.lastIndexOf('}')
-    if (start < 0 || end <= start) {
-      return { ok: false, error: { kind: 'schema-violation', message: 'Brak JSON w odpowiedzi.', retryable: false } }
-    }
-    try {
-      return { ok: true, raw: JSON.parse(fenced.slice(start, end + 1)) }
-    } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'Nie udało się sparsować JSON z odpowiedzi.', retryable: false } }
-    }
-  } catch (err) {
-    if ((err as Error)?.name === 'AbortError') {
-      return { ok: false, error: { kind: 'timeout-ambiguous', message: 'Wyszukiwanie przekroczyło limit czasu.', retryable: false } }
-    }
-    return { ok: false, error: { kind: 'offline', message: 'Brak połączenia z dostawcą.', retryable: true } }
-  } finally {
-    clearTimeout(timer)
-  }
+): Promise<ScanOutcome> {
+  return callModel(provider, input.model, buildLabelScanRequest(provider, credential, input), timeoutMs, fetchImpl)
 }

@@ -1,7 +1,6 @@
-import { cheapestModel, type ProviderId } from '@nutai/prompt'
+import { cheapestModel, type Credential, type ProviderId } from '@nutai/prompt'
 import { setting } from '../data/repo'
 import { loadCredential } from './credentials'
-import type { Credential } from './pathA/client'
 
 /**
  * One resolver for every call site that used to read `provider`,
@@ -14,14 +13,9 @@ import type { Credential } from './pathA/client'
 export type ProviderSetting = ProviderId | 'none' | ''
 
 export interface Resolved {
-  /** The wire dialect the builders and the envelope extractor use. */
-  dialect: ProviderId
-  /** What the user chose; drives copy and the settings UI. */
-  selected: ProviderId
-  /** The photo-scan model. */
+  /** The provider the user chose; also the wire dialect. */
+  provider: ProviderId
   model: string
-  /** The model for text-only calls (label and receipt reading, web lookup). */
-  textModel: string
   credential: Credential
 }
 
@@ -36,5 +30,5 @@ export async function resolveInference(): Promise<ResolveOutcome> {
   const credential = await loadCredential(provider)
   if (!credential) return { ok: false, error: { kind: 'key-missing' } }
   const model = (await setting('provider_model')) || cheapestModel(provider).id
-  return { ok: true, value: { dialect: provider, selected: provider, model, textModel: model, credential } }
+  return { ok: true, value: { provider, model, credential } }
 }

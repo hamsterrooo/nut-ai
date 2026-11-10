@@ -12,6 +12,7 @@ import { PROVIDER_NAME } from '../../src/components/CredentialForm'
 import { Icon } from '../../src/components/Icon'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
+import { DIET_LABEL_PL, type DietStyle } from '../../src/onboarding/store'
 
 /**
  * Profile.
@@ -156,7 +157,7 @@ export default function Profile() {
           onPress={() => router.push('/edit-goals' as never)}
         />
         <Row label="Zapisz wagę" value="" onPress={() => router.push('/log-weight' as never)} />
-        <Row label="Styl diety" value={diet} />
+        <Row label="Styl diety" value={DIET_LABEL_PL[diet as DietStyle] ?? diet} />
         <Row
           label="Cel adaptacyjny"
           value={goal ? (goal.adaptive ? 'Włączony' : 'Wyłączony, ustawiony ręcznie') : '—'}

@@ -4,9 +4,9 @@ import {
   LabelPayloadZ,
   VISION_WIRE_SCHEMA,
   VisionPayloadZ,
-  WebLookupResultZ,
   type IngredientRow,
   type LoggedMeal,
+  type NutrientRow100g,
 } from '@nutai/core-schema'
 import type { PersonalPriors } from '@nutai/gram-engine'
 import {
@@ -17,13 +17,13 @@ import {
   LABEL_SCAN_PROMPT_VERSION,
   type ProviderId,
 } from '@nutai/prompt'
-import { recomputeAfterEdit, runPipeline, validatePayload, type ScanResult } from '@nutai/pipeline'
+import { recomputeAfterEdit, runPipeline, type ScanResult } from '@nutai/pipeline'
 import { stampSchemaVersion } from './stamp-schema-version'
 import { openNutritionDb } from '../db/expo-adapter'
 import { loadFoodDb } from '../db/portions'
-import { runLabelScan, runScanWithFallback, runWebLookup, type ScanFailure, type WebLookupOutcome } from '../inference/pathA/client'
-import { resolveInference, type ResolveFailure, type Resolved } from '../inference/resolve'
-import { applyWebOption, getPhase, setPhase, setWebLookup } from './store'
+import { runLabelScan, runScanWithFallback, type ScanFailure } from '../inference/pathA/client'
+import { resolveInference, type ResolveFailure } from '../inference/resolve'
+import { getPhase, setPhase } from './store'
 import { displayNameWithBrand, lookupOffProduct } from './barcode-lookup'
 
 /**
@@ -37,21 +37,23 @@ import { displayNameWithBrand, lookupOffProduct } from './barcode-lookup'
  *   identifying  the one model call — the only stage that owns wall-clock time
  *   matching     the deterministic pipeline against the bundled USDA corpus
  *   ready        review screen, editable rows
- *   (background) web-search refinement for items the corpus missed
- *
- * D16 note: the refinement stage transcribes published nutrition facts with a
- * source URL. It replaces AI-estimate rows — the weakest rows on the screen —
- * with cited label data, and never touches a row the database already matched.
  */
 
 const EMPTY_PRIORS: PersonalPriors = { get: () => null, containers: new Map() }
 
-/** Kept for retry, so a network blip does not re-run image preprocessing. */
-let lastCapture: { photoUri: string; base64: string } | null = null
-/** What "Spróbuj ponownie" repeats. Without this a failed label retried as a meal photo. */
-let lastRetry: { kind: 'scan' | 'label'; photoUri: string } | { kind: 'barcode'; gtin: string } | { kind: 'text'; text: string } = { kind: 'scan', photoUri: '' }
-/** The description of a text scan, so Fix Result can resend it. Null for every other scan. */
-let lastText: string | null = null
+/**
+ * The last request, and exactly what repeating or fixing it needs. One record, so
+ * a retry can never pair one scan's kind with another scan's capture.
+ *
+ * A meal photo keeps its base64 so a network blip does not re-run image preprocessing.
+ */
+type LastRequest =
+  | { kind: 'scan'; photoUri: string; base64: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'label'; photoUri: string }
+  | { kind: 'barcode'; gtin: string }
+
+let last: LastRequest | null = null
 
 const HEADLINE = {
   label: 'Nie udało się odczytać etykiety',
@@ -91,11 +93,23 @@ async function preprocess(photoUri: string): Promise<string> {
   return base64!
 }
 
-/** The copy for "nothing to scan with", per feature. */
 /** The failure screen's copyable code: the HTTP status when there is one, else the failure kind. */
 function codeProp(err: ScanFailure | undefined): { code: string } | Record<string, never> {
   if (!err) return {}
   return { code: err.httpStatus ? String(err.httpStatus) : err.kind }
+}
+
+/** A failed model call, as the failed phase the review screen shows. */
+function failedFromError(photoUri: string, error: ScanFailure, headline?: string): void {
+  setPhase({
+    kind: 'failed',
+    photoUri,
+    ...(headline ? { headline } : {}),
+    message: error.message,
+    canRetry: error.retryable,
+    failureKind: error.kind,
+    ...codeProp(error),
+  })
 }
 
 function resolveFailureCopy(err: ResolveFailure, feature: 'scan' | 'label' | 'text'): { message: string; failureKind: 'no-key' | 'key-invalid' } {
@@ -109,24 +123,7 @@ function resolveFailureCopy(err: ResolveFailure, feature: 'scan' | 'label' | 'te
   return { message: base, failureKind: 'no-key' }
 }
 
-/**
- * Web lookup is OFF. It rides on Gemini's Google Search grounding, which the
- * free tier does not include (limit 0, so every call is a 429). Callers already
- * treat a failed lookup as "no match", so the answer is a local failure with no
- * request. Flip to true only on a billed key.
- */
-const WEB_LOOKUP_ENABLED = false
-
-async function webLookup(r: Resolved, input: { itemName: string; brand: string | null; visualContext?: string | null }): Promise<WebLookupOutcome> {
-  if (!WEB_LOOKUP_ENABLED) {
-    return { ok: false, error: { kind: 'model-unavailable', message: 'Wyszukiwanie w sieci jest wyłączone.', retryable: false } }
-  }
-  return runWebLookup(r.dialect, { model: r.textModel, ...input }, r.credential)
-}
-
 export async function startScan(photoUri: string): Promise<void> {
-  lastRetry = { kind: 'scan', photoUri }
-  lastText = null
   setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string
@@ -142,18 +139,17 @@ export async function startScan(photoUri: string): Promise<void> {
     return
   }
 
-  lastCapture = { photoUri, base64 }
+  last = { kind: 'scan', photoUri, base64 }
   await analyze(photoUri, base64)
 }
 
 export async function retryScan(): Promise<void> {
-  if (lastRetry.kind === 'barcode') return startBarcodeScan(lastRetry.gtin)
-  if (lastRetry.kind === 'label') return startLabelScan(lastRetry.photoUri)
-  if (lastRetry.kind === 'text') return startTextScan(lastRetry.text)
-  if (!lastCapture) return
-  const { photoUri, base64 } = lastCapture
-  setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  await analyze(photoUri, base64)
+  if (!last) return
+  if (last.kind === 'barcode') return startBarcodeScan(last.gtin)
+  if (last.kind === 'label') return startLabelScan(last.photoUri)
+  if (last.kind === 'text') return startTextScan(last.text)
+  setPhase({ kind: 'analyzing', photoUri: last.photoUri, stage: 'identifying' })
+  await analyze(last.photoUri, last.base64)
 }
 
 /**
@@ -164,9 +160,7 @@ export async function retryScan(): Promise<void> {
 export async function startTextScan(text: string): Promise<void> {
   const note = text.trim()
   if (!note) return
-  lastRetry = { kind: 'text', text: note }
-  lastText = note
-  lastCapture = null
+  last = { kind: 'text', text: note }
   setPhase({ kind: 'analyzing', photoUri: '', stage: 'identifying' })
   await analyze('', '', { text: note })
 }
@@ -182,46 +176,15 @@ interface AnalyzeOpts {
   text?: string
 }
 
-async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {}): Promise<void> {
-  const resolved = await resolveInference()
-  if (!resolved.ok) {
-    setPhase({ kind: 'failed', photoUri, canRetry: false, ...resolveFailureCopy(resolved.error, 'scan') })
-    return
-  }
-  const r = resolved.value
-
-  setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  const outcome = await runScanWithFallback({
-    provider: r.dialect,
-    model: r.model,
-    credential: r.credential,
-    imagesBase64: opts.text ? [] : [base64],
-    localSignalsBlock: [opts.text ? buildLocalSignalsBlock({ userHint: opts.text }) : '', opts.fixBlock ?? ''].filter(Boolean).join('\n\n'),
-    ...(opts.text ? { textOnly: true } : {}),
-    jsonSchema: wireSchemaFor(r.dialect),
-  })
-
-  if (!outcome.ok) {
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      message: outcome.error.message,
-      canRetry: outcome.error.retryable,
-      failureKind: outcome.error.kind,
-      ...codeProp(outcome.error),
-    })
-    return
-  }
-
-  setPhase({ kind: 'analyzing', photoUri, stage: 'matching' })
-
-  const rawPayload = stampSchemaVersion(outcome.value.raw)
-  let result: ScanResult | null = null
-  let pipelineError = ''
+/**
+ * The deterministic half of a scan: validate the model's JSON, match it against the
+ * bundled corpus, price it. `result` is null with a short reason when it cannot.
+ */
+async function runLocalPipeline(rawPayload: unknown): Promise<{ result: ScanResult | null; error: string }> {
   try {
     const nutritionDb = await openNutritionDb()
     const foodDb = await loadFoodDb(nutritionDb)
-    result = await runPipeline(
+    const result = await runPipeline(
       rawPayload,
       {
         db: nutritionDb,
@@ -232,28 +195,53 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
       },
       foodDb,
     )
+    if (result) return { result, error: '' }
   } catch (e) {
-    result = null
-    const raw = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
-    pipelineError = raw.replace(/\s+/g, ' ').slice(0, 400)
     console.warn('[scan] pipeline failed', e)
+    const raw = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+    return { result: null, error: raw.replace(/\s+/g, ' ').slice(0, 400) }
   }
 
-  if (!result && !pipelineError) {
-    // runPipeline returns null (no throw) when the model's JSON fails the
-    // VisionPayloadZ check. Re-run the check here to surface the reason.
-    const check = VisionPayloadZ.safeParse(rawPayload)
-    if (!check.success) {
-      pipelineError = check.error.issues
-        .slice(0, 3)
-        .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
-        .join('; ')
-        .slice(0, 400)
-    } else {
-      pipelineError = 'Walidacja schematu przeszła, ale pipeline zwrócił pusty wynik.'
-    }
-    console.warn('[scan] schema violation', JSON.stringify(rawPayload)?.slice(0, 2000))
+  // runPipeline returns null (no throw) when the model's JSON fails the
+  // VisionPayloadZ check. Re-run the check here to surface the reason.
+  console.warn('[scan] schema violation', JSON.stringify(rawPayload)?.slice(0, 2000))
+  const check = VisionPayloadZ.safeParse(rawPayload)
+  if (check.success) return { result: null, error: 'Walidacja schematu przeszła, ale pipeline zwrócił pusty wynik.' }
+  const issues = check.error.issues
+    .slice(0, 3)
+    .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+    .join('; ')
+  return { result: null, error: issues.slice(0, 400) }
+}
+
+async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {}): Promise<void> {
+  const resolved = await resolveInference()
+  if (!resolved.ok) {
+    setPhase({ kind: 'failed', photoUri, canRetry: false, ...resolveFailureCopy(resolved.error, 'scan') })
+    return
   }
+  const r = resolved.value
+
+  setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
+  const outcome = await runScanWithFallback({
+    provider: r.provider,
+    model: r.model,
+    credential: r.credential,
+    imagesBase64: opts.text ? [] : [base64],
+    localSignalsBlock: [opts.text ? buildLocalSignalsBlock({ userHint: opts.text }) : '', opts.fixBlock ?? ''].filter(Boolean).join('\n\n'),
+    ...(opts.text ? { textOnly: true } : {}),
+    jsonSchema: wireSchemaFor(r.provider),
+  })
+
+  if (!outcome.ok) {
+    failedFromError(photoUri, outcome.error)
+    return
+  }
+
+  setPhase({ kind: 'analyzing', photoUri, stage: 'matching' })
+
+  const { result: piped, error: pipelineError } = await runLocalPipeline(stampSchemaVersion(outcome.value.raw))
+  let result = piped
 
   if (!result) {
     setPhase({
@@ -291,71 +279,14 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     result,
     bands: result.items.map((i) => i.band),
     meta: {
-      provider: r.selected,
+      provider: r.provider,
       model: r.model,
       inputTokens: outcome.value.inputTokens + (opts.priorMeta?.inputTokens ?? 0),
       outputTokens: outcome.value.outputTokens + (opts.priorMeta?.outputTokens ?? 0),
       costUsd: outcome.value.costUsd + (opts.priorMeta?.costUsd ?? 0),
       promptVersion: outcome.value.promptVersion,
     },
-    webLookups: {},
   })
-
-  // Fire-and-forget: refinement upgrades rows underneath the review screen.
-  void refineMisses(result, rawPayload, r)
-}
-
-/** How many corpus misses we will pay to look up per scan. */
-const MAX_LOOKUPS_PER_SCAN = 2
-
-/**
- * Background refinement: every item the corpus missed gets one shot at being
- * upgraded from "AI estimate" to "transcribed from the brand's published
- * nutrition facts". One option auto-applies; several become a question card.
- */
-async function refineMisses(result: ScanResult, rawPayload: unknown, r: Resolved): Promise<void> {
-  const payload = validatePayload(rawPayload)
-  // Two triggers: the corpus missed entirely, or the model saw a BRAND (a logo
-  // counts — golden arches on the wrapper). A branded item that matched some
-  // generic corpus row still deserves the brand's own published numbers.
-  const misses = result.items
-    .map((item, index) => ({ item, index }))
-    .filter(
-      ({ item, index }) =>
-        item.resolution === 'miss' || payload?.items[index]?.brand != null,
-    )
-    .slice(0, MAX_LOOKUPS_PER_SCAN)
-
-  await Promise.all(
-    misses.map(async ({ item, index }) => {
-      const rowId = item.row.id
-      setWebLookup(rowId, { status: 'running' })
-
-      const source = payload?.items[index]
-      const lookup = await webLookup(r, {
-        itemName: source?.name ?? item.row.displayName,
-        brand: source?.brand ?? null,
-        visualContext: source?.legible_label_text ?? null,
-      })
-
-      if (!lookup.ok) {
-        setWebLookup(rowId, { status: 'failed' })
-        return
-      }
-      const parsed = WebLookupResultZ.safeParse(lookup.raw)
-      if (!parsed.success || !parsed.data.found || parsed.data.options.length === 0) {
-        setWebLookup(rowId, { status: 'failed' })
-        return
-      }
-
-      setWebLookup(rowId, { status: 'done', result: parsed.data })
-      // Unambiguous single match: apply it. The row visibly upgrades from
-      // amber AI-estimate to a cited source — that is the payoff moment.
-      if (parsed.data.options.length === 1 && !parsed.data.question) {
-        applyWebOption(rowId, parsed.data.options[0]!, parsed.data.source_url)
-      }
-    }),
-  )
 }
 
 /**
@@ -369,7 +300,7 @@ async function refineMisses(result: ScanResult, rawPayload: unknown, r: Resolved
  */
 export async function fixScan(note: string): Promise<void> {
   const phase = getPhase()
-  if (phase.kind !== 'ready' || (!lastCapture && !lastText)) return
+  if (phase.kind !== 'ready' || !last || (last.kind !== 'scan' && last.kind !== 'text')) return
 
   const rows = phase.result.meal.ingredients
     .map((r) => `- ${r.displayName}: ${Math.round(r.grams)} g`)
@@ -385,10 +316,14 @@ export async function fixScan(note: string): Promise<void> {
 
   const keepFraction = phase.result.meal.portionEatenFraction
   const priorMeta = phase.meta
-  const photoUri = phase.photoUri ?? lastCapture?.photoUri ?? ''
+  const photoUri = phase.photoUri ?? ''
 
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  await analyze(photoUri, lastCapture?.base64 ?? '', { fixBlock, priorMeta, keepFraction, ...(lastText ? { text: lastText } : {}) })
+  if (last.kind === 'text') {
+    await analyze(photoUri, '', { fixBlock, priorMeta, keepFraction, text: last.text })
+  } else {
+    await analyze(photoUri, last.base64, { fixBlock, priorMeta, keepFraction })
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -405,7 +340,6 @@ function readyFromRows(
   photoUri: string | null,
   engineId: string,
   promptVersion: string | null,
-  webLookups: Record<string, import('./store').WebLookupState> = {},
 ): void {
   const meal: LoggedMeal = {
     id: `meal_${Date.now()}`,
@@ -423,9 +357,7 @@ function readyFromRows(
     reasons: [
       r.origin === 'label_ocr'
         ? 'Przepisano z wydrukowanej etykiety wartości odżywczych'
-        : r.origin === 'web_lookup'
-          ? 'Przepisano z opublikowanych wartości odżywczych'
-          : 'Dopasowano po kodzie kreskowym do produktu z etykiety',
+        : 'Dopasowano po kodzie kreskowym do produktu z etykiety',
     ],
   }))
   const { totals, mealBand } = recomputeAfterEdit(meal, bands)
@@ -445,7 +377,29 @@ function readyFromRows(
     clampFlags: [],
     zeroHitCount: 0,
   }
-  setPhase({ kind: 'ready', photoUri, result, bands, meta: null, webLookups })
+  setPhase({ kind: 'ready', photoUri, result, bands, meta: null })
+}
+
+/** A row whose numbers came off a package: exact by construction, uncertain only by label rounding. */
+function packagedRow(
+  displayName: string,
+  sourceFoodId: number | null,
+  grams: number,
+  nutrientSnapshot: NutrientRow100g,
+  origin: 'barcode' | 'label_ocr',
+): IngredientRow {
+  return {
+    id: `row_${Date.now()}`,
+    displayName,
+    sourceFoodId: sourceFoodId == null ? null : String(sourceFoodId),
+    grams,
+    nutrientSnapshot,
+    origin,
+    gramPathway: 'packaged_exact',
+    bandHalfPct: 0.05,
+    isEstimate: false,
+    assumptions: [],
+  }
 }
 
 interface BarcodeFoodRow {
@@ -467,8 +421,7 @@ interface BarcodeFoodRow {
  * tries Open Food Facts once, then points at the label scanner.
  */
 export async function startBarcodeScan(gtin: string): Promise<void> {
-  lastRetry = { kind: 'barcode', gtin }
-  lastText = null
+  last = { kind: 'barcode', gtin }
   setPhase({ kind: 'analyzing', photoUri: '', stage: 'matching' })
 
   let food: BarcodeFoodRow | null = null
@@ -486,15 +439,13 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   }
 
   if (food && food.energy_kcal != null) {
-    const grams = food.serving_size_g ?? 100
     readyFromRows(
       [
-        {
-          id: `row_${Date.now()}`,
-          displayName: displayNameWithBrand(food.brand, food.name),
-          sourceFoodId: String(food.id),
-          grams,
-          nutrientSnapshot: {
+        packagedRow(
+          displayNameWithBrand(food.brand, food.name),
+          food.id,
+          food.serving_size_g ?? 100,
+          {
             kcal: food.energy_kcal,
             protein_g: food.protein_g ?? 0,
             fat_g: food.fat_g ?? 0,
@@ -503,12 +454,8 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
             sugar_g: food.sugar_g,
             sodium_mg: food.sodium_mg,
           },
-          origin: 'barcode',
-          gramPathway: 'packaged_exact',
-          bandHalfPct: 0.05,
-          isEstimate: false,
-          assumptions: [],
-        },
+          'barcode',
+        ),
       ],
       null,
       'barcode-local',
@@ -523,28 +470,7 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   if (lookup.kind === 'found') {
     const off = lookup.product
     readyFromRows(
-      [
-        {
-          id: `row_${Date.now()}`,
-          displayName: displayNameWithBrand(off.brand, off.name),
-          sourceFoodId: null,
-          grams: off.servingG ?? 100,
-          nutrientSnapshot: {
-            kcal: off.nutrients.kcal,
-            protein_g: off.nutrients.protein_g,
-            fat_g: off.nutrients.fat_g,
-            carbs_g: off.nutrients.carbs_g,
-            fiber_g: off.nutrients.fiber_g,
-            sugar_g: off.nutrients.sugar_g,
-            sodium_mg: off.nutrients.sodium_mg,
-          },
-          origin: 'barcode',
-          gramPathway: 'packaged_exact',
-          bandHalfPct: 0.05,
-          isEstimate: false,
-          assumptions: [],
-        },
-      ],
+      [packagedRow(displayNameWithBrand(off.brand, off.name), null, off.servingG ?? 100, off.nutrients, 'barcode')],
       null,
       'barcode-off',
       null,
@@ -586,8 +512,7 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
  * the one place the app promises exactness.
  */
 export async function startLabelScan(photoUri: string): Promise<void> {
-  lastRetry = { kind: 'label', photoUri }
-  lastText = null
+  last = { kind: 'label', photoUri }
   setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string
@@ -597,8 +522,6 @@ export async function startLabelScan(photoUri: string): Promise<void> {
     setPhase({ kind: 'failed', photoUri, headline: HEADLINE.label, message: 'Nie udało się odczytać zdjęcia. Zrób je ponownie.', canRetry: false })
     return
   }
-  lastCapture = { photoUri, base64 }
-
   const resolved = await resolveInference()
   if (!resolved.ok) {
     setPhase({ kind: 'failed', photoUri, headline: HEADLINE.label, canRetry: false, ...resolveFailureCopy(resolved.error, 'label') })
@@ -607,21 +530,13 @@ export async function startLabelScan(photoUri: string): Promise<void> {
   const r = resolved.value
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
 
-  const outcome = await runLabelScan(r.dialect, { model: r.model, imageBase64: base64 }, r.credential)
+  const outcome = await runLabelScan(r.provider, { model: r.model, imageBase64: base64 }, r.credential)
   if (!outcome.ok) {
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      headline: HEADLINE.label,
-      message: outcome.error ? outcome.error.message : 'Nie udało się odczytać etykiety.',
-      canRetry: outcome.error?.retryable ?? false,
-      failureKind: outcome.error?.kind,
-      ...codeProp(outcome.error),
-    })
+    failedFromError(photoUri, outcome.error, HEADLINE.label)
     return
   }
 
-  const parsed = LabelPayloadZ.safeParse(outcome.raw)
+  const parsed = LabelPayloadZ.safeParse(outcome.value.raw)
   if (!parsed.success || parsed.data.per_serving.calories_kcal <= 0) {
     setPhase({
       kind: 'failed',
@@ -649,12 +564,11 @@ export async function startLabelScan(photoUri: string): Promise<void> {
   const p = label.per_serving
   readyFromRows(
     [
-      {
-        id: `row_${Date.now()}`,
-        displayName: label.product_name ?? 'Labeled item',
-        sourceFoodId: null,
+      packagedRow(
+        label.product_name ?? 'Labeled item',
+        null,
         grams,
-        nutrientSnapshot: {
+        {
           kcal: p.calories_kcal * per100,
           protein_g: p.protein_g * per100,
           fat_g: p.fat_g * per100,
@@ -663,41 +577,11 @@ export async function startLabelScan(photoUri: string): Promise<void> {
           sugar_g: p.sugar_g == null ? null : p.sugar_g * per100,
           sodium_mg: p.sodium_mg == null ? null : p.sodium_mg * per100,
         },
-        origin: 'label_ocr',
-        gramPathway: 'packaged_exact',
-        bandHalfPct: 0.05,
-        isEstimate: false,
-        assumptions: [],
-      },
+        'label_ocr',
+      ),
     ],
     photoUri,
     'label-scan',
     LABEL_SCAN_PROMPT_VERSION,
   )
-}
-
-/**
- * Free-text "Other" answer on a question card: one more search, seeded with
- * what the user typed.
- */
-export async function lookupOther(rowId: string, typed: string): Promise<void> {
-  const resolved = await resolveInference()
-  if (!resolved.ok) return
-  const r = resolved.value
-
-  setWebLookup(rowId, { status: 'running' })
-  const lookup = await webLookup(r, { itemName: typed, brand: null })
-  if (!lookup.ok) {
-    setWebLookup(rowId, { status: 'failed' })
-    return
-  }
-  const parsed = WebLookupResultZ.safeParse(lookup.raw)
-  if (!parsed.success || !parsed.data.found || parsed.data.options.length === 0) {
-    setWebLookup(rowId, { status: 'failed' })
-    return
-  }
-  setWebLookup(rowId, { status: 'done', result: parsed.data })
-  if (parsed.data.options.length === 1) {
-    applyWebOption(rowId, parsed.data.options[0]!, parsed.data.source_url)
-  }
 }

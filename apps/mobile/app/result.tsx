@@ -13,7 +13,6 @@ import {
 } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { WebLookupResult } from '@nutai/core-schema'
 import type { SelectedQuestion } from '@nutai/repair'
 import { recomputeTotals } from '@nutai/totals'
 import { Icon } from '../src/components/Icon'
@@ -25,10 +24,9 @@ import { PressableScale, enterItem } from '../src/components/motion'
 import { logMeal } from '../src/data/repo'
 import { isAnswerable } from '../src/scan/answers'
 import { isPreciseMeal } from '../src/scan/precision'
-import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
+import { fixScan, retryScan } from '../src/scan/orchestrator'
 import {
   answerQuestion,
-  applyWebOption,
   editGrams,
   removeRow,
   reset,
@@ -36,7 +34,6 @@ import {
   setNote,
   setTitle,
   useScan,
-  type WebLookupState,
 } from '../src/scan/store'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
@@ -224,7 +221,6 @@ export default function Result() {
         <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Składniki</Text>
 
         {result.meal.ingredients.map((row, idx) => {
-          const lookup = phase.webLookups[row.id]
           const f = row.grams / 100
           const s = row.nutrientSnapshot
           return (
@@ -232,11 +228,7 @@ export default function Result() {
               <View style={styles.ingRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[type.body, { color: theme.text }]}>{row.displayName}</Text>
-                  {row.origin === 'web_lookup' && row.sourceUrl ? (
-                    <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
-                      Źródło: {domainOf(row.sourceUrl)}
-                    </Text>
-                  ) : row.isEstimate ? (
+                  {row.isEstimate ? (
                     <Text style={[type.micro, { color: theme.uncertain, marginTop: 2 }]}>SZACUNEK AI</Text>
                   ) : null}
                 </View>
@@ -270,7 +262,6 @@ export default function Result() {
               />
 
               {row.origin === 'vision_model' || row.origin === 'db_search' ? <ProductSuggestions row={row} /> : null}
-              {lookup ? <WebLookupCard rowId={row.id} state={lookup} /> : null}
             </Animated.View>
           )
         })}
@@ -376,11 +367,6 @@ export default function Result() {
   )
 }
 
-function domainOf(url: string): string {
-  const m = url.match(/^https?:\/\/(?:www\.)?([^/]+)/i)
-  return m?.[1] ?? url
-}
-
 /**
  * One clarifying question with single-select, deselectable chips.
  *
@@ -441,99 +427,6 @@ function QuestionCard({
   )
 }
 
-/**
- * The web-lookup card under a row the corpus missed.
- *
- * Three states: a quiet "checking" line, a generated multiple-choice question
- * where EVERY option already carries its published nutrition (tapping is a
- * free local swap), and an Other row that runs one more search with whatever
- * the user typed.
- */
-function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState }) {
-  const theme = useTheme()
-  const [otherOpen, setOtherOpen] = useState(false)
-  const [otherText, setOtherText] = useState('')
-
-  if (state.status === 'running') {
-    return (
-      <View style={[styles.lookupQuiet, { backgroundColor: theme.bgSunken }]}>
-        <ActivityIndicator size="small" color={theme.textFaint} />
-        <Text style={[type.caption, { color: theme.textMuted }]}>
-          Szukanie opublikowanych wartości odżywczych w sieci…
-        </Text>
-      </View>
-    )
-  }
-  if (state.status === 'failed') return null
-
-  const result: WebLookupResult = state.result
-  // A single auto-applied option needs no card — the row above already shows
-  // its source.
-  if (result.options.length <= 1 && !result.question) return null
-
-  return (
-    <View style={[styles.qCard, { borderColor: theme.uncertain, backgroundColor: theme.uncertainBg, marginTop: space.sm }]}>
-      <Text style={[type.bodyStrong, { color: theme.text }]}>
-        {result.question ?? 'Który to był?'}
-      </Text>
-      {result.source_url ? (
-        <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
-          Dane z: {domainOf(result.source_url)}
-        </Text>
-      ) : null}
-
-      <View style={{ marginTop: space.md, gap: space.sm }}>
-        {result.options.map((opt) => (
-          <Pressable
-            key={opt.label}
-            onPress={() => applyWebOption(rowId, opt, result.source_url)}
-            style={[styles.optionRow, { borderColor: theme.uncertain, backgroundColor: theme.bg }]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={[type.body, { color: theme.text }]}>{opt.label}</Text>
-              {opt.serving_desc ? (
-                <Text style={[type.micro, { color: theme.textMuted, marginTop: 1 }]}>{opt.serving_desc}</Text>
-              ) : null}
-            </View>
-            <Text style={[type.label, { color: theme.textMuted }]}>{Math.round(opt.calories_kcal)} kcal</Text>
-          </Pressable>
-        ))}
-
-        {otherOpen ? (
-          <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
-            <TextInput
-              autoFocus
-              placeholder="Wpisz, co to było"
-              placeholderTextColor={theme.textFaint}
-              value={otherText}
-              onChangeText={setOtherText}
-              onSubmitEditing={() => {
-                if (otherText.trim()) void lookupOther(rowId, otherText.trim())
-                setOtherOpen(false)
-              }}
-              returnKeyType="search"
-              style={[styles.otherInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
-            />
-            <Pressable
-              onPress={() => {
-                if (otherText.trim()) void lookupOther(rowId, otherText.trim())
-                setOtherOpen(false)
-              }}
-              hitSlop={space.sm}
-            >
-              <Icon name="search" size={18} color={theme.text} />
-            </Pressable>
-          </View>
-        ) : (
-          <Pressable onPress={() => setOtherOpen(true)} style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bg }]}>
-            <Text style={[type.body, { color: theme.textMuted }]}>Inne…</Text>
-          </Pressable>
-        )}
-      </View>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl },
   ingCard: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg },
@@ -585,32 +478,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.sm,
   },
   photo: { width: 160, height: 160, borderRadius: radius.lg },
-  lookupQuiet: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    padding: space.md,
-    borderRadius: radius.md,
-    marginTop: space.sm,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingHorizontal: space.md,
-    paddingVertical: space.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    minHeight: MIN_TAP_TARGET,
-  },
-  otherInput: {
-    flex: 1,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: MIN_TAP_TARGET,
-  },
   remove: { width: MIN_TAP_TARGET, height: MIN_TAP_TARGET, alignItems: 'center', justifyContent: 'center' },
   actions: {
     position: 'absolute',

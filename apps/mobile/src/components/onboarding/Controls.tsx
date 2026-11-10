@@ -453,8 +453,6 @@ export function WheelHighlight({ children }: { children: React.ReactNode }) {
   )
 }
 
-export const WHEEL_ROW_HEIGHT = ROW_HEIGHT
-
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',

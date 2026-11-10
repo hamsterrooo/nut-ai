@@ -121,19 +121,6 @@ export function metricsByStratum(
   return out
 }
 
-/** Per-pathway attribution, so a regression points at the tier that caused it. */
-export function metricsByPathway(
-  predictions: readonly Prediction[],
-  truth: readonly GroundTruth[],
-): Record<string, Metrics> {
-  const pathways = [...new Set(predictions.map((p) => p.pathway))]
-  const out: Record<string, Metrics> = {}
-  for (const p of pathways) {
-    out[p] = computeMetrics(predictions.filter((x) => x.pathway === p), truth)
-  }
-  return out
-}
-
 // ---------------------------------------------------------------------------
 // The merge gate
 // ---------------------------------------------------------------------------

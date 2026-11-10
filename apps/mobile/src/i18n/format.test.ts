@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDate, formatDecimal, formatInteger, formatMonthYear, pluralPl, weekdayName } from './format'
+import { formatDate, formatDecimal, formatInteger, pluralPl } from './format'
 
 describe('formatDecimal', () => {
   it('uses a decimal comma and keeps trailing zeros', () => {
@@ -27,12 +27,6 @@ describe('dates', () => {
   it('formats genitive month names', () => {
     expect(formatDate(new Date(2026, 0, 5))).toBe('5 stycznia')
     expect(formatDate(new Date(2026, 8, 30), { withYear: true })).toBe('30 września 2026')
-  })
-  it('formats month and year in the nominative', () => {
-    expect(formatMonthYear(new Date(2026, 9, 11))).toBe('październik 2026')
-  })
-  it('names weekdays', () => {
-    expect(weekdayName(new Date(2026, 9, 11))).toBe('niedziela')
   })
 })
 

@@ -31,29 +31,10 @@ const MONTHS_GENITIVE = [
   'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia',
 ] as const
 
-const MONTHS_NOMINATIVE = [
-  'styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec',
-  'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień',
-] as const
-
-const WEEKDAYS = [
-  'niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota',
-] as const
-
 /** "12 stycznia" (or "12 stycznia 2027" with `withYear`). */
 export function formatDate(d: Date, opts: { withYear?: boolean } = {}): string {
   const base = `${d.getDate()} ${MONTHS_GENITIVE[d.getMonth()]}`
   return opts.withYear ? `${base} ${d.getFullYear()}` : base
-}
-
-/** "styczeń 2027". */
-export function formatMonthYear(d: Date): string {
-  return `${MONTHS_NOMINATIVE[d.getMonth()]} ${d.getFullYear()}`
-}
-
-/** "wtorek". */
-export function weekdayName(d: Date): string {
-  return WEEKDAYS[d.getDay()]!
 }
 
 /**

@@ -1,11 +1,11 @@
 import { router } from 'expo-router'
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
-import { bmi, UNDERWEIGHT_BMI } from '@nutai/goals'
+import { bmi, inferredGoal, MAINTAIN_THRESHOLD_KG, UNDERWEIGHT_BMI } from '@nutai/goals'
 import { OnboardingScreen } from '../../src/components/onboarding/Chrome'
 import { EditableValue, RulerPicker } from '../../src/components/onboarding/Controls'
 import { formatDecimal } from '../../src/i18n/format'
 import { nextRoute, stepIndex, TOTAL_STEPS } from '../../src/onboarding/flow'
-import { inferredGoal, MAINTAIN_THRESHOLD_KG, setAnswer, useAnswers } from '../../src/onboarding/store'
+import { setAnswer, useAnswers } from '../../src/onboarding/store'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
 

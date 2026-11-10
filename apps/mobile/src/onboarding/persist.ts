@@ -1,14 +1,11 @@
 import Storage from 'expo-sqlite/kv-store'
 import { migrate } from '@nutai/db-adapter'
-import type { CalorieTarget, MacroTargets } from '@nutai/goals'
+import type { Plan } from '@nutai/goals'
+import { localDate } from '../data/date-utils'
+import { insertGoal } from '../data/goal-write'
 import { openUserDb } from '../db/expo-adapter'
 import { ONBOARDING_DONE_KEY } from './done-key'
-import {
-  activityFor,
-  ageFrom,
-  inferredGoal,
-  type OnboardingAnswers,
-} from './store'
+import { activityFor, type OnboardingAnswers } from './store'
 
 /**
  * Write the onboarding result into `user.db`.
@@ -24,8 +21,7 @@ import {
  */
 export async function persistOnboarding(
   answers: OnboardingAnswers,
-  target: CalorieTarget,
-  macros: MacroTargets,
+  plan: Plan,
 ): Promise<void> {
   const db = await openUserDb()
   const now = Date.now()
@@ -52,31 +48,22 @@ export async function persistOnboarding(
       ],
     )
 
-    await tx.run(
-      `INSERT INTO goals
-         (effective_from, goal_type, rate_lb_per_week, target_kcal, target_raw_kcal,
-          floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`,
-      [
-        now,
-        inferredGoal(answers),
-        null,
-        target.target,
-        target.targetRaw,
-        target.floorApplied ? 1 : 0,
-        macros.protein_g,
-        macros.fat_g,
-        macros.carbs_g,
-        target.bmr,
-        target.tdee,
-      ],
-    )
+    await insertGoal(tx, {
+      effectiveFrom: now,
+      goalType: plan.goal,
+      targetKcal: plan.target.target,
+      targetRawKcal: plan.target.targetRaw,
+      floorApplied: plan.target.floorApplied,
+      ...plan.macros,
+      bmr: plan.target.bmr,
+      tdee: plan.target.tdee,
+      adaptive: true,
+    })
 
     if (answers.weightKg != null) {
-      const localDate = new Date(now).toISOString().slice(0, 10)
       await tx.run(
         'INSERT OR REPLACE INTO weight_entries (local_date, weight_kg, logged_at) VALUES (?,?,?)',
-        [localDate, answers.weightKg, now],
+        [localDate(now), answers.weightKg, now],
       )
     }
 
@@ -91,7 +78,6 @@ export async function persistOnboarding(
       // and keeps one vocabulary — the old inference.* mirror keys are gone.
       ['provider', answers.provider ?? 'none'],
       ['provider_model', answers.providerModel ?? ''],
-      ['age.years', String(ageFrom(answers, now))],
     ]
 
     for (const [key, value] of settings) {

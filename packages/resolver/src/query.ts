@@ -80,9 +80,3 @@ export function matchLadder(canonicalFoodKey: string): string[] {
 
   return ladder
 }
-
-/** Trigram query for the typo-tolerant shadow index. Needs >= 3 characters. */
-export function toTrigramExpression(text: string): string | null {
-  const cleaned = text.toLowerCase().replace(FTS_SPECIAL, ' ').trim()
-  return cleaned.length >= 3 ? `"${cleaned}"` : null
-}

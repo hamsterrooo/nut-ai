@@ -12,7 +12,6 @@ import {
   currentGoal,
   dayTotals,
   deleteMeal,
-  localDate,
   mealsForDay,
   runAdaptive,
   type AdaptiveOutcome,
@@ -20,6 +19,7 @@ import {
   type DayTotals,
   type MealRow,
 } from '../../src/data/repo'
+import { localDate } from '../../src/data/date-utils'
 import { groupMeals, removeFromGroup, ungroup } from '../../src/data/meal-edit'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'

@@ -414,3 +414,72 @@ export function isDayCompleteEnough(input: {
     !input.hasQueuedEntries
   )
 }
+
+// ---------------------------------------------------------------------------
+// The plan: one place that turns a body, a weight and a target weight into a goal
+// ---------------------------------------------------------------------------
+
+/**
+ * Weight change below this is "maintain".
+ *
+ * 1 kg is inside the range a single day of water, salt and timing can move you,
+ * so a target within 1 kg of today is not a direction: it is the same weight
+ * measured twice.
+ */
+export const MAINTAIN_THRESHOLD_KG = 1
+
+/**
+ * The goal, inferred. Current weight and target weight already contain the
+ * answer; a separate "what is your goal?" question can only agree with them or
+ * contradict them.
+ */
+export function inferredGoal(a: { weightKg: number | null; desiredWeightKg: number | null }): Goal {
+  if (a.weightKg == null || a.desiredWeightKg == null) return 'maintain'
+  const deltaKg = a.desiredWeightKg - a.weightKg
+  if (Math.abs(deltaKg) < MAINTAIN_THRESHOLD_KG) return 'maintain'
+  return deltaKg > 0 ? 'gain' : 'lose'
+}
+
+/**
+ * Age in whole years at `now` (local time), clamped to the range the equations
+ * are meant for. Without a birth year it is 30. Without month and day (installs
+ * from before the full birth date was stored) it is the calendar-year difference.
+ */
+export function ageFromBirthDate(
+  now: number,
+  year: number | null,
+  month: number | null,
+  day: number | null,
+): number {
+  if (year == null) return 30
+  const today = new Date(now)
+  let age = today.getFullYear() - year
+  if (month != null && day != null) {
+    const m = today.getMonth() + 1
+    if (m < month || (m === month && today.getDate() < day)) age--
+  }
+  return Math.max(13, Math.min(100, age))
+}
+
+export interface PlanInputs extends BodyInputs {
+  activity: ActivityLevel
+  desiredWeightKg: number
+}
+
+export interface Plan {
+  goal: Goal
+  /** Unsigned target rate. Zero when maintaining. */
+  rateLbPerWeek: number
+  deltaKg: number
+  target: CalorieTarget
+  macros: MacroTargets
+}
+
+/** A sane default rate (a twelfth of the distance per week, 0.25 to 1 lb), then the safety floor argues with it. */
+export function planFor(i: PlanInputs): Plan {
+  const goal = inferredGoal({ weightKg: i.weightKg, desiredWeightKg: i.desiredWeightKg })
+  const deltaKg = Math.abs(i.desiredWeightKg - i.weightKg)
+  const rateLbPerWeek = goal === 'maintain' ? 0 : Math.min(1, Math.max(0.25, (deltaKg * LB_PER_KG) / 12))
+  const target = computeCalorieTarget({ ...i, goal, rateLbPerWeek })
+  return { goal, rateLbPerWeek, deltaKg, target, macros: computeMacros(target.target, i.weightKg, goal) }
+}

@@ -1,11 +1,11 @@
 import { pluralPl } from '../i18n/format'
 import { migrate, type DbAdapter } from '@nutai/db-adapter'
 import {
-  computeCalorieTarget,
+  ageFromBirthDate,
   computeMacros,
   computeTrend,
   isDayCompleteEnough,
-  LB_PER_KG,
+  planFor,
   retargetFromTdee,
   safeFloor,
   trendSlopeLbPerWeek,
@@ -19,14 +19,13 @@ import {
 } from '@nutai/goals'
 import Storage from 'expo-sqlite/kv-store'
 import { ONBOARDING_DONE_KEY } from '../onboarding/done-key'
-import { inferredGoal } from '../onboarding/store'
 import { EXPORT_TABLES, WIPE_ONLY_TABLES } from './backup-core'
-import { localDate, slotFor } from './date-utils'
+import { localDate } from './date-utils'
+import { insertGoal } from './goal-write'
+import { insertLogItem, insertMeal } from './log-write'
 import { dissolveIfAlone } from './meal-edit'
 import { clearCredential } from '../inference/credentials'
 import { openUserDb } from '../db/expo-adapter'
-
-export { localDate, slotFor }
 
 /**
  * The read/write layer over `user.db`.
@@ -149,42 +148,26 @@ export async function putSetting(key: string, value: string): Promise<void> {
   await h.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)', [key, value])
 }
 
-/** A consent the user gave, with when and to which version of the text. */
-export async function recordConsent(key: string, detail: string): Promise<void> {
-  const h = await db()
-  await h.run('INSERT OR REPLACE INTO consents (key, granted, granted_at, detail) VALUES (?, 1, ?, ?)', [key, Date.now(), detail])
-}
-
 /** Manual target override from the plan screen's pencil icons. */
 export async function overrideTargets(
   next: { targetKcal: number; macros: MacroTargets },
   base: CurrentGoal,
   now: number,
 ): Promise<void> {
-  const h = await db()
-  await h.run(
-    `INSERT INTO goals
-       (effective_from, goal_type, rate_lb_per_week, target_kcal, target_raw_kcal,
-        floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [
-      now,
-      base.goalType,
-      null,
-      next.targetKcal,
-      next.targetKcal,
-      0,
-      next.macros.protein_g,
-      next.macros.fat_g,
-      next.macros.carbs_g,
-      base.bmr,
-      base.tdee,
-      // A hand-set target turns the adaptive loop OFF. Silently overwriting a
-      // number the user deliberately chose is the fastest way to lose their
-      // trust in every other number.
-      0,
-    ],
-  )
+  await insertGoal(await db(), {
+    effectiveFrom: now,
+    goalType: base.goalType,
+    targetKcal: next.targetKcal,
+    targetRawKcal: next.targetKcal,
+    floorApplied: false,
+    ...next.macros,
+    bmr: base.bmr,
+    tdee: base.tdee,
+    // A hand-set target turns the adaptive loop OFF. Silently overwriting a
+    // number the user deliberately chose is the fastest way to lose their
+    // trust in every other number.
+    adaptive: false,
+  })
 }
 
 export interface RecomputedGoal {
@@ -197,27 +180,10 @@ export interface RecomputedGoal {
 }
 
 /**
- * The plan onboarding would produce today: profile (sex, birth year, height,
- * activity) plus the LATEST weigh-in and the desired weight saved earlier. Same
- * rate rule as the plan screen. Returns null until there is a profile and a weight.
- * Age is computed from the full birth date when month and day are known (installs
- * that onboarded after schema v2, or re-did the birth date screen). Installs that
- * migrated from v1 and never revisited it fall back to a calendar-year difference,
- * which can be a year high before the birthday.
+ * The plan onboarding would produce today: profile (sex, birth date, height,
+ * activity) plus the LATEST weigh-in and the desired weight saved earlier.
+ * Returns null until there is a profile and a weight.
  */
-/**
- * Age from a birth date. Falls back to the calendar-year difference when month
- * or day is unknown (pre-v2 installs that never revisited the birth date screen).
- */
-function ageFromBirthDate(now: number, year: number, month: number | null, day: number | null): number {
-  const today = new Date(now)
-  const thisYearAge = today.getFullYear() - year
-  if (month == null || day == null) return thisYearAge
-  const hadBirthdayThisYear =
-    today.getMonth() + 1 > month || (today.getMonth() + 1 === month && today.getDate() >= day)
-  return hadBirthdayThisYear ? thisYearAge : thisYearAge - 1
-}
-
 export async function recomputeGoalFromProfile(
   now: number,
   activityOverride?: ActivityLevel,
@@ -235,24 +201,16 @@ export async function recomputeGoalFromProfile(
   if (!p || !w || p.height_cm == null) return null
 
   const desiredRaw = Number.parseFloat(await setting('goal.desiredWeightKg', ''))
-  const desiredKg = Number.isFinite(desiredRaw) && desiredRaw > 0 ? desiredRaw : w.weight_kg
-  const goalType = inferredGoal({ weightKg: w.weight_kg, desiredWeightKg: desiredKg })
-  const deltaLb = Math.abs(desiredKg - w.weight_kg) * LB_PER_KG
-  const rate = goalType === 'maintain' ? 0 : Math.min(1, Math.max(0.25, deltaLb / 12))
-  const age = p.birth_year == null ? 30 : Math.max(13, Math.min(100, ageFromBirthDate(now, p.birth_year, p.birth_month, p.birth_day)))
-
   const activity = activityOverride ?? ((p.activity_level ?? 'sedentary') as ActivityLevel)
-  const target = computeCalorieTarget({
+  const plan = planFor({
     sex: p.sex === 'male' || p.sex === 'female' ? p.sex : 'unspecified',
     weightKg: w.weight_kg,
     heightCm: p.height_cm,
-    ageYears: age,
+    ageYears: ageFromBirthDate(now, p.birth_year, p.birth_month, p.birth_day),
     activity,
-    goal: goalType,
-    rateLbPerWeek: rate,
+    desiredWeightKg: Number.isFinite(desiredRaw) && desiredRaw > 0 ? desiredRaw : w.weight_kg,
   })
-  const macros = computeMacros(target.target, w.weight_kg, goalType)
-  return { target, macros, goalType, weightKg: w.weight_kg, heightCm: p.height_cm, activity }
+  return { target: plan.target, macros: plan.macros, goalType: plan.goal, weightKg: w.weight_kg, heightCm: p.height_cm, activity }
 }
 
 /**
@@ -263,25 +221,17 @@ export async function applyRecomputedGoal(r: RecomputedGoal, now: number): Promi
   const h = await db()
   await h.transaction(async (tx) => {
     await tx.run('UPDATE user_profile SET activity_level = ? WHERE id = 1', [r.activity])
-    await tx.run(
-      `INSERT INTO goals
-         (effective_from, goal_type, rate_lb_per_week, target_kcal, target_raw_kcal,
-          floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`,
-      [
-        now,
-        r.goalType,
-        null,
-        r.target.target,
-        r.target.targetRaw,
-        r.target.floorApplied ? 1 : 0,
-        r.macros.protein_g,
-        r.macros.fat_g,
-        r.macros.carbs_g,
-        r.target.bmr,
-        r.target.tdee,
-      ],
-    )
+    await insertGoal(tx, {
+      effectiveFrom: now,
+      goalType: r.goalType,
+      targetKcal: r.target.target,
+      targetRawKcal: r.target.targetRaw,
+      floorApplied: r.target.floorApplied,
+      ...r.macros,
+      bmr: r.target.bmr,
+      tdee: r.target.tdee,
+      adaptive: true,
+    })
   })
 }
 
@@ -486,62 +436,43 @@ export async function logMeal(
   const date = localDate(now)
 
   return h.transaction(async (tx) => {
-    const meal = await tx.run(
-      `INSERT INTO meals (logged_at, local_date, meal_slot, photo_uri, portion_eaten_fraction,
-                          analysis_status, engine_id, prompt_version, schema_version,
-                          clamp_flags_json, created_at, title, note)
-       VALUES (?,?,?,?,?,'complete',?,?,?,?,?,?,?)`,
-      [
-        now,
-        date,
-        slotFor(now),
-        photoUri,
-        result.meal.portionEatenFraction,
-        result.meal.engineId,
-        result.meal.promptVersion,
-        result.meal.schemaVersion,
-        JSON.stringify(result.clampFlags ?? []),
-        now,
-        extras.title?.trim() || null,
-        extras.note?.trim() || null,
-      ],
-    )
-    const mealId = Number(meal.lastInsertRowId)
+    const mealId = await insertMeal(tx, {
+      loggedAt: now,
+      photoUri,
+      portionEatenFraction: result.meal.portionEatenFraction,
+      engineId: result.meal.engineId,
+      promptVersion: result.meal.promptVersion,
+      schemaVersion: result.meal.schemaVersion,
+      clampFlagsJson: JSON.stringify(result.clampFlags ?? []),
+      title: extras.title?.trim() || null,
+      note: extras.note?.trim() || null,
+    })
 
-    let sort = 0
-    for (const row of result.meal.ingredients) {
+    for (const [sort, row] of result.meal.ingredients.entries()) {
       const foodId = row.sourceFoodId == null ? null : Number(row.sourceFoodId)
-      await tx.run(
-        `INSERT INTO log_items (meal_id, matched_food_id, matched_food_source, raw_model_label,
-                                display_name, grams, gram_pathway, portion_source,
-                                snap_energy_kcal, snap_protein_g, snap_fat_g, snap_carb_g,
-                                snap_fiber_g, snap_sugar_g, snap_sodium_mg,
-                                is_estimate, macros_user_edited, band_half_pct,
-                                assumptions_json, sort_order, logged_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          mealId,
-          Number.isFinite(foodId as number) ? foodId : null,
-          row.origin === 'web_lookup' ? 'web' : row.sourceFoodId != null ? 'corpus' : 'estimate',
-          row.sourceUrl ?? null,
-          row.displayName,
-          row.grams,
-          row.gramPathway,
-          row.origin,
-          row.nutrientSnapshot.kcal,
-          row.nutrientSnapshot.protein_g,
-          row.nutrientSnapshot.fat_g,
-          row.nutrientSnapshot.carbs_g,
-          row.nutrientSnapshot.fiber_g ?? null,
-          row.nutrientSnapshot.sugar_g ?? null,
-          row.nutrientSnapshot.sodium_mg ?? null,
-          row.isEstimate ? 1 : 0,
-          row.macrosUserEdited ? 1 : 0,
-          row.bandHalfPct,
-          JSON.stringify(row.assumptions ?? []),
-          sort++,
-          now,
-        ],
+      await insertLogItem(
+        tx,
+        mealId,
+        {
+          foodId: Number.isFinite(foodId as number) ? foodId : null,
+          displayName: row.displayName,
+          grams: row.grams,
+          gramPathway: row.gramPathway,
+          portionSource: row.origin,
+          kcal: row.nutrientSnapshot.kcal,
+          protein_g: row.nutrientSnapshot.protein_g,
+          fat_g: row.nutrientSnapshot.fat_g,
+          carbs_g: row.nutrientSnapshot.carbs_g,
+          fiber_g: row.nutrientSnapshot.fiber_g ?? null,
+          sugar_g: row.nutrientSnapshot.sugar_g ?? null,
+          sodium_mg: row.nutrientSnapshot.sodium_mg ?? null,
+          isEstimate: row.isEstimate,
+          macrosUserEdited: row.macrosUserEdited ?? false,
+          bandHalfPct: row.bandHalfPct,
+          assumptionsJson: JSON.stringify(row.assumptions ?? []),
+        },
+        sort,
+        now,
       )
     }
 
@@ -691,25 +622,17 @@ export async function runAdaptive(now: number): Promise<AdaptiveOutcome> {
   const latestKg = points[points.length - 1]?.weightKg ?? 80
   const macros = computeMacros(next.target, latestKg, goal.goalType)
 
-  await h.run(
-    `INSERT INTO goals
-       (effective_from, goal_type, rate_lb_per_week, target_kcal, target_raw_kcal,
-        floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`,
-    [
-      now,
-      goal.goalType,
-      null,
-      next.target,
-      next.raw,
-      next.floorApplied ? 1 : 0,
-      macros.protein_g,
-      macros.fat_g,
-      macros.carbs_g,
-      goal.bmr,
-      result.newTdee,
-    ],
-  )
+  await insertGoal(h, {
+    effectiveFrom: now,
+    goalType: goal.goalType,
+    targetKcal: next.target,
+    targetRawKcal: next.raw,
+    floorApplied: next.floorApplied,
+    ...macros,
+    bmr: goal.bmr,
+    tdee: result.newTdee,
+    adaptive: true,
+  })
 
   return {
     ran: true,

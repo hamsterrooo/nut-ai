@@ -7,8 +7,8 @@ doprecyzowujące i uzasadnienia pewności, aktualne modele Google.
 Jeszcze nie zrobione (etap 2):
 
 - Kody kreskowe: wbudowana baza OFF Polska, potem Open Food Facts API. Brak trafienia odsyła do
-  trybu Etykieta. Wyszukiwanie w sieci przez Gemini jest wyłączone (`WEB_LOOKUP_ENABLED` w
-  `orchestrator.ts`), bo grounding z Google Search nie działa na darmowym kluczu.
+  trybu Etykieta. Wyszukiwanie w sieci przez Gemini zostało usunięte (grounding z Google Search
+  nie działa na darmowym kluczu); kod jest w historii gita sprzed tego patcha.
 - Polskie nazwy produktów w bazie. Wyszukiwarka ręczna dalej szuka po angielsku (USDA).
 - Usunięty został cały podsystem publik API (zarządzany klucz, portfel, ekrany); aplikacja działa wyłącznie na własnym kluczu użytkownika.
 

@@ -3,14 +3,12 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle, Line as SvgLine, Path, Rect, Text as SvgText } from 'react-native-svg'
-import { bmi, computeTrend, trendSlopeLbPerWeek, type TrendPoint, type WeightPoint } from '@nutai/goals'
+import { bmi, computeTrend, LB_PER_KG, trendSlopeLbPerWeek, type TrendPoint, type WeightPoint } from '@nutai/goals'
 import { currentGoal, db, setting, weightHistory, type CurrentGoal } from '../../src/data/repo'
 import { Icon } from '../../src/components/Icon'
 import { formatDecimal, formatInteger, pluralPl } from '../../src/i18n/format'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
-
-const LB_PER_KG = 2.20462
 
 const WINDOWS = [
   { key: '90D', label: '90 dni', days: 90 },

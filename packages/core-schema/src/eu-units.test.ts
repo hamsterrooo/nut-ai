@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { kcalFromKj, LabelPayloadZ, sodiumMgFromSaltG, WebLookupResultZ } from './index.js'
+import { kcalFromKj, LabelPayloadZ, sodiumMgFromSaltG } from './index.js'
 
 const panel = {
   calories_kcal: 250,
@@ -50,29 +50,5 @@ describe('LabelPayloadZ with EU panels', () => {
   })
   it('accepts panels that omit the new fields entirely', () => {
     expect(LabelPayloadZ.safeParse(label(panel)).success).toBe(true)
-  })
-})
-
-describe('WebLookupResultZ with salt', () => {
-  const option = {
-    label: 'Chleb',
-    serving_g: 100,
-    serving_desc: '100 g',
-    calories_kcal: 250,
-    protein_g: 8,
-    carbs_g: 48,
-    fat_g: 2,
-    fiber_g: 4,
-    sodium_mg: null,
-  }
-  it('derives sodium from salt and drops the salt field', () => {
-    const r = WebLookupResultZ.parse({
-      found: true,
-      source_url: 'https://example.pl',
-      question: null,
-      options: [{ ...option, salt_g: 1.0 }],
-    })
-    expect(r.options[0]!.sodium_mg).toBe(400)
-    expect('salt_g' in r.options[0]!).toBe(false)
   })
 })

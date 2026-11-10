@@ -1,6 +1,6 @@
 import type { DbAdapter } from '@nutai/db-adapter'
 import type { NutrientRow100g } from '@nutai/core-schema'
-import { localDate, slotFor } from './date-utils'
+import { insertLogItem, insertMeal } from './log-write'
 
 /**
  * A food picked directly off the Food Database search screen — no photo, no
@@ -25,42 +25,30 @@ export interface ManualFoodSelection {
 }
 
 export async function logManualFood(h: DbAdapter, selection: ManualFoodSelection, now: number): Promise<number> {
-  const date = localDate(now)
   const n = selection.nutrientSnapshot
 
   return h.transaction(async (tx) => {
-    const meal = await tx.run(
-      `INSERT INTO meals (logged_at, local_date, meal_slot, portion_eaten_fraction, analysis_status, created_at)
-       VALUES (?,?,?,1.0,'complete',?)`,
-      [now, date, slotFor(now), now],
+    const mealId = await insertMeal(tx, { loggedAt: now })
+    await insertLogItem(
+      tx,
+      mealId,
+      {
+        foodId: selection.foodId,
+        displayName: selection.displayName,
+        grams: selection.grams,
+        gramPathway: 'fndds_standard_portion',
+        portionSource: 'db_search',
+        kcal: n.kcal,
+        protein_g: n.protein_g,
+        fat_g: n.fat_g,
+        carbs_g: n.carbs_g,
+        fiber_g: n.fiber_g ?? null,
+        sugar_g: n.sugar_g ?? null,
+        sodium_mg: n.sodium_mg ?? null,
+      },
+      0,
+      now,
     )
-    const mealId = Number(meal.lastInsertRowId)
-
-    await tx.run(
-      `INSERT INTO log_items (meal_id, matched_food_id, matched_food_source, display_name, grams,
-                              gram_pathway, portion_source, snap_energy_kcal, snap_protein_g, snap_fat_g,
-                              snap_carb_g, snap_fiber_g, snap_sugar_g, snap_sodium_mg,
-                              is_estimate, macros_user_edited, sort_order, logged_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?)`,
-      [
-        mealId,
-        selection.foodId,
-        'corpus',
-        selection.displayName,
-        selection.grams,
-        'fndds_standard_portion',
-        'db_search',
-        n.kcal,
-        n.protein_g,
-        n.fat_g,
-        n.carbs_g,
-        n.fiber_g ?? null,
-        n.sugar_g ?? null,
-        n.sodium_mg ?? null,
-        now,
-      ],
-    )
-
     return mealId
   })
 }

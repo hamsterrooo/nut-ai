@@ -2,7 +2,8 @@ import { router } from 'expo-router'
 import { TrendComparisonChart } from '../../src/components/onboarding/Charts'
 import { OnboardingScreen } from '../../src/components/onboarding/Chrome'
 import { nextRoute, stepIndex, TOTAL_STEPS } from '../../src/onboarding/flow'
-import { inferredGoal, useAnswers } from '../../src/onboarding/store'
+import { inferredGoal } from '@nutai/goals'
+import { useAnswers } from '../../src/onboarding/store'
 
 export default function TrendScreen() {
   const a = useAnswers()

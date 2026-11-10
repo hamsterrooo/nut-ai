@@ -2,26 +2,12 @@ import { router } from 'expo-router'
 import { useMemo } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import {
-  computeCalorieTarget,
-  computeMacros,
-  KCAL_PER_LB,
-  type BodyInputs,
-} from '@nutai/goals'
+import { ageFromBirthDate, KCAL_PER_LB, LB_PER_KG, planFor } from '@nutai/goals'
 import { Icon, type IconName } from '../../src/components/Icon'
 import { ProgressChart } from '../../src/components/onboarding/Charts'
 import { persistOnboarding } from '../../src/onboarding/persist'
 import { formatDate, formatDecimal, formatInteger } from '../../src/i18n/format'
-import {
-  ACTIVITY_LABEL_PL,
-  activityFor,
-  ageFrom,
-  DIET_BIAS,
-  inferredGoal,
-  kgToLb,
-  LB_PER_KG,
-  useAnswers,
-} from '../../src/onboarding/store'
+import { ACTIVITY_LABEL_PL, activityFor, DIET_LABEL_PL, useAnswers } from '../../src/onboarding/store'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
 
@@ -50,41 +36,25 @@ export default function PlanScreen() {
   const insets = useSafeAreaInsets()
   const a = useAnswers()
 
-  const derivedGoal = inferredGoal(a)
-
   const plan = useMemo(() => {
     const nowMs = Date.now()
-    const body: BodyInputs = {
-      sex: a.sex ?? 'unspecified',
-      weightKg: a.weightKg ?? 80,
-      heightCm: a.heightCm ?? 170,
-      ageYears: ageFrom(a, nowMs),
-    }
-
     const currentKg = a.weightKg ?? 80
-    const targetKg = a.desiredWeightKg ?? currentKg
-    const deltaKg = Math.abs(targetKg - currentKg)
-    // @nutai/goals does its arithmetic in pounds per week; that stays internal.
-    const deltaLb = kgToLb(deltaKg)
-
-    // A sane default rate, then let the floor clamp argue with it if it must.
-    const rate = derivedGoal === 'maintain' ? 0 : Math.min(1, Math.max(0.25, deltaLb / 12))
-
-    const target = computeCalorieTarget({
-      ...body,
+    const p = planFor({
+      sex: a.sex ?? 'unspecified',
+      weightKg: currentKg,
+      heightCm: a.heightCm ?? 170,
+      ageYears: ageFromBirthDate(nowMs, a.birthYear, a.birthMonth, a.birthDay),
       activity: activityFor(a.workoutsPerWeek),
-      goal: derivedGoal,
-      rateLbPerWeek: rate,
+      desiredWeightKg: a.desiredWeightKg ?? currentKg,
     })
-    const macros = computeMacros(target.target, body.weightKg, derivedGoal)
 
     // Target date from the actual arithmetic, not a flattering guess.
-    const weeks = rate > 0 ? deltaLb / rate : 0
-    const date = new Date(nowMs + weeks * 7 * 86_400_000)
-    const dateLabel = formatDate(date)
+    const weeks = p.rateLbPerWeek > 0 ? (p.deltaKg * LB_PER_KG) / p.rateLbPerWeek : 0
+    const dateLabel = formatDate(new Date(nowMs + weeks * 7 * 86_400_000))
 
-    return { target, macros, deltaKg, dateLabel, rateKg: rate / LB_PER_KG, rateLb: rate }
-  }, [a, derivedGoal])
+    return { ...p, dateLabel, rateKg: p.rateLbPerWeek / LB_PER_KG }
+  }, [a])
+  const derivedGoal = plan.goal
 
   const gaining = derivedGoal === 'gain'
   const goalLine =
@@ -92,7 +62,7 @@ export default function PlanScreen() {
       ? 'Cel: utrzymać wagę'
       : `Cel: ${gaining ? 'przytyć' : 'schudnąć'} ${formatDecimal(plan.deltaKg, 0)} kg do ${plan.dateLabel}`
 
-  const diet = a.dietStyle ? DIET_BIAS[a.dietStyle] : null
+  const dietLabel = a.dietStyle ? DIET_LABEL_PL[a.dietStyle] : null
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -171,7 +141,7 @@ export default function PlanScreen() {
             {derivedGoal !== 'maintain' ? (
               <MathRow
                 label={`${gaining ? '+' : '−'} ${formatDecimal(plan.rateKg, 2)} kg/tydzień`}
-                value={`${gaining ? '+' : '−'}${formatInteger((plan.rateLb * KCAL_PER_LB) / 7)} kcal`}
+                value={`${gaining ? '+' : '−'}${formatInteger((plan.rateLbPerWeek * KCAL_PER_LB) / 7)} kcal`}
               />
             ) : null}
             <MathRow label="Twój dzienny cel" value={`${formatInteger(plan.target.target)} kcal`} strong />
@@ -185,7 +155,7 @@ export default function PlanScreen() {
             <InfoRow icon="person" label="Waga początkowa" value={`${formatDecimal(a.weightKg ?? 80)} kg`} />
             <InfoRow icon="target" label="Waga docelowa" value={`${formatDecimal(a.desiredWeightKg ?? a.weightKg ?? 80)} kg`} />
             <InfoRow icon="steps" label="Poziom aktywności" value={ACTIVITY_LABEL_PL[activityFor(a.workoutsPerWeek)] ?? ''} />
-            {diet ? <InfoRow icon="bowl" label="Dieta" value={diet.label} /> : null}
+            {dietLabel ? <InfoRow icon="bowl" label="Dieta" value={dietLabel} /> : null}
           </View>
         </View>
 
@@ -208,7 +178,7 @@ export default function PlanScreen() {
             // Persist BEFORE navigating. A plan the user saw but the app forgot
             // is worse than no plan: they would arrive at a Today screen whose
             // targets contradict the screen they just approved.
-            void persistOnboarding(a, plan.target, plan.macros).then(() => {
+            void persistOnboarding(a, plan).then(() => {
               router.replace('/(tabs)' as never)
             })
           }}
